@@ -56,7 +56,7 @@ private:
     inline i32 get_signed_immediate(const u32 instruction) { return (i16)instruction; }
     inline u32 get_jump_address(const u32 instruction) { return (pc & 0xf0000000) | ((instruction & 0x03ffffff) << 2); }
     inline u32 get_offset(const u32 instruction) { return ((u32)((i16)instruction)) << 2; }
-    inline u32 get_address(const u32 instruction) { return registers[get_rs(instruction)] + get_immediate(instruction); }
+    inline u32 get_address(const u32 instruction) { return (u32)((i32)registers[get_rs(instruction)] + (i32)get_signed_immediate(instruction)); }
     inline u32 get_shamt(const u32 instruction) { return (instruction >> 6) & 0b11111; }
 
     // Bus
