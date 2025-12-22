@@ -1,0 +1,646 @@
+#include "cpu.h"
+
+void CPU::execute(const u32 instruction)
+{
+    delayed_load_next.first = 0;
+
+    // Decode
+    switch (instruction)
+    {
+        case 0x00:
+            switch (instruction & 0b11111)
+            {
+                case 0x00: sll(instruction);     break;
+                case 0x02: srl(instruction);     break;
+                case 0x03: sra(instruction);     break;
+                case 0x04: sllv(instruction);    break;
+                case 0x06: srlv(instruction);    break;
+                case 0x07: srav(instruction);    break;
+                case 0x08: jr(instruction);      break;
+                case 0x09: jalr(instruction);    break;
+                case 0x0c: syscall(instruction); break;
+                case 0x0d: _break(instruction);  break;
+                case 0x10: mfhi(instruction);    break;
+                case 0x11: mthi(instruction);    break;
+                case 0x12: mflo(instruction);    break;
+                case 0x13: mtlo(instruction);    break;
+                case 0x18: mult(instruction);    break;
+                case 0x19: multu(instruction);   break;
+                case 0x1a: div(instruction);     break;
+                case 0x1b: divu(instruction);    break;
+                case 0x20: add(instruction);     break;
+                case 0x21: addu(instruction);    break;
+                case 0x22: sub(instruction);     break;
+                case 0x23: subu(instruction);    break;
+                case 0x24: _and(instruction);    break;
+                case 0x25: _or(instruction);     break;
+                case 0x26: _xor(instruction);    break;
+                case 0x27: nor(instruction);     break;
+                case 0x2a: slt(instruction);     break;
+                case 0x2b: sltu(instruction);    break;
+                default: dbg("TODO: reserved instruction exception"); exit(1); break;
+            }
+        break;
+
+        case 0x01:
+            switch ((instruction >> 16) & 0b11111)
+            {
+                case 0x10: bltzal(instruction); break;
+                case 0x11: bgezal(instruction); break;
+                default:
+                    if (instruction & 0b1000000000000000)
+                        bltz(instruction);
+                    else
+                        bgez(instruction);
+                break;
+            }
+        break;
+
+        case 0x02: j(instruction);      break;
+        case 0x03: jal(instruction);    break;
+        case 0x04: beq(instruction);    break;
+        case 0x05: bne(instruction);    break;
+        case 0x06: blez(instruction);   break;
+        case 0x07: bgtz(instruction);   break;
+        case 0x08: addi(instruction);   break;
+        case 0x09: addiu(instruction);  break;
+        case 0x0a: slti(instruction);   break;
+        case 0x0b: sltiu(instruction);  break;
+        case 0x0c: andi(instruction);   break;
+        case 0x0d: ori(instruction);    break;
+        case 0x0e: xori(instruction);   break;
+        case 0x0f: lui(instruction);    break;
+        case 0x10: cop0(instruction);   break;
+        case 0x11: cop1(instruction);   break;
+        case 0x12: cop2(instruction);   break;
+        case 0x13: cop3(instruction);   break;
+        case 0x20: lb(instruction);     break;
+        case 0x21: lh(instruction);     break;
+        case 0x22: lwl(instruction);    break;
+        case 0x23: lw(instruction);     break;
+        case 0x24: lbu(instruction);    break;
+        case 0x25: lhu(instruction);    break;
+        case 0x26: lwr(instruction);    break;
+        case 0x28: sb(instruction);     break;
+        case 0x29: sh(instruction);     break;
+        case 0x2a: swl(instruction);    break;
+        case 0x2b: sw(instruction);     break;
+        case 0x2e: swr(instruction);    break;
+        case 0x30: lwc0(instruction);   break;
+        case 0x31: lwc1(instruction);   break;
+        case 0x32: lwc2(instruction);   break;
+        case 0x33: lwc3(instruction);   break;
+        case 0x38: swc0(instruction);   break;
+        case 0x39: swc1(instruction);   break;
+        case 0x3a: swc2(instruction);   break;
+        case 0x3b: swc3(instruction);   break;
+        default: dbg("TODO: reserved instruction exception"); exit(1); break;
+    }
+
+    // Process load delay
+    registers[delayed_load.first] = delayed_load.second;
+    delayed_load = delayed_load_next;
+
+    // Force R0 back, in-case it changed
+    registers[0] = 0;
+}
+
+void CPU::write_register(const u32 reg, const u32 value)
+{
+    registers[reg] = value;
+
+    // Overwrite any delayed loads
+    if (delayed_load.first == reg)
+        delayed_load.first = 0;
+}
+
+void CPU::write_register_delayed(const u32 reg, const u32 value)
+{
+    delayed_load_next = { reg, value };
+
+    // Cancel the one that came before
+    if (delayed_load.first == reg)
+        delayed_load.first = 0;
+}
+
+u32 CPU::read_register_for_lwl_and_lwr(const u32 reg)
+{
+    return delayed_load.first == reg ? delayed_load.second : registers[reg];
+}
+
+u8 CPU::read_u8(const u32 address)
+{
+    return bus.read_u8(address);
+}
+
+u16 CPU::read_u16(const u32 address)
+{
+    return bus.read_u16(address);
+}
+
+u32 CPU::read_u32(const u32 address)
+{
+    return bus.read_u32(address);
+}
+
+void CPU::write_u8(const u32 address, const u8 value)
+{
+    bus.write_u8(address, value);
+}
+
+void CPU::write_u16(const u32 address, const u16 value)
+{
+    bus.write_u16(address, value);
+}
+
+void CPU::write_u32(const u32 address, const u32 value)
+{
+    bus.write_u32(address, value);
+}
+
+void CPU::j(const u32 instruction)
+{
+    branch_pc = get_jump_address(instruction);
+}
+
+void CPU::jal(const u32 instruction)
+{
+    branch_pc = get_jump_address(instruction);
+    write_register(31, pc + 4);
+}
+
+void CPU::beq(const u32 instruction)
+{
+    branch(instruction, registers[get_rs(instruction)] == registers[get_rt(instruction)]);
+}
+
+void CPU::bne(const u32 instruction)
+{
+    branch(instruction, registers[get_rs(instruction)] != registers[get_rt(instruction)]);
+}
+
+void CPU::blez(const u32 instruction)
+{
+    branch(instruction, (i32)registers[get_rs(instruction)] <= 0);
+}
+
+void CPU::bgtz(const u32 instruction)
+{
+    branch(instruction, (i32)registers[get_rs(instruction)] >= 0);
+}
+
+void CPU::bltzal(const u32 instruction)
+{
+    branch(instruction, (i32)registers[get_rs(instruction)], true);
+}
+
+void CPU::bgezal(const u32 instruction)
+{
+    branch(instruction, (i32)registers[get_rs(instruction)], true);
+}
+
+void CPU::bltz(const u32 instruction)
+{
+    branch(instruction, (i32)registers[get_rs(instruction)]);
+}
+
+void CPU::bgez(const u32 instruction)
+{
+    branch(instruction, (i32)registers[get_rs(instruction)]);
+}
+
+void CPU::addi(const u32 instruction)
+{
+    i32 rs = (i32)get_rs(instruction);
+    i32 imm = get_signed_immediate(instruction);
+
+    if ((rs > 0 && imm > std::numeric_limits<i32>::max() - rs) ||
+        (rs < 0 && imm < std::numeric_limits<i32>::min() - rs))
+    {
+        dbg("TODO: overflow");
+        exit(1);
+    }
+
+    write_register(get_rt(instruction), (u32)(rs + imm));
+}
+
+void CPU::addiu(const u32 instruction)
+{
+    write_register(get_rt(instruction), registers[get_rs(instruction)] + get_immediate(instruction));
+}
+
+void CPU::slti(const u32 instruction)
+{
+    write_register(get_rt(instruction), (i32)registers[get_rs(instruction)] < get_signed_immediate(instruction) ? 1 : 0);
+}
+
+void CPU::sltiu(const u32 instruction)
+{
+    write_register(get_rt(instruction), registers[get_rs(instruction)] < get_immediate(instruction) ? 1 : 0);
+}
+
+void CPU::andi(const u32 instruction)
+{
+    write_register(get_rt(instruction), registers[get_rs(instruction)] & get_immediate(instruction));
+}
+
+void CPU::ori(const u32 instruction)
+{
+    write_register(get_rt(instruction), registers[get_rs(instruction)] | get_immediate(instruction));
+}
+
+void CPU::xori(const u32 instruction)
+{
+    write_register(get_rt(instruction), registers[get_rs(instruction)] ^ get_immediate(instruction));
+}
+
+void CPU::lui(const u32 instruction)
+{
+    write_register(get_rt(instruction), instruction << 16);
+}
+
+void CPU::cop0(const u32 instruction)
+{
+    dbg("todo");
+    exit(1);(void)instruction;
+}
+
+void CPU::cop1(const u32 instruction)
+{
+    dbg("todo");
+    exit(1);(void)instruction;
+}
+
+void CPU::cop2(const u32 instruction)
+{
+    dbg("todo");
+    exit(1);(void)instruction;
+}
+
+void CPU::cop3(const u32 instruction)
+{
+    dbg("todo");
+    exit(1);(void)instruction;
+}
+
+void CPU::lb(const u32 instruction)
+{
+    write_register_delayed(get_rt(instruction), (u32)(i32)(i8)read_u8(get_address(instruction)));
+}
+
+void CPU::lh(const u32 instruction)
+{
+    const u32 address = get_address(instruction);
+    if ((address & 1) != 0)
+    {
+        dbg("TODO: misaligned access");
+        exit(1);
+    }
+
+    write_register_delayed(get_rt(instruction), (u32)(i32)(i16)read_u16(address));
+}
+
+void CPU::lwl(const u32 instruction)
+{
+    const u32 address = get_address(instruction);
+    const u32 rt = get_rt(instruction);
+    const u32 existing = read_register_for_lwl_and_lwr(rt);
+    const u32 from_mem = read_u32(address & !(0b111));
+    const u32 shift = 8 * ((address & 3) ^ 3);
+    const u32 mask = 0xffffffff << shift;
+    write_register_delayed(rt, (existing & !mask) | (from_mem << shift));
+}
+
+void CPU::lw(const u32 instruction)
+{
+    const u32 address = get_address(instruction);
+    if ((address & 0b11) != 0)
+    {
+        dbg("TODO: misaligned access");
+        exit(1);
+    }
+
+    write_register_delayed(get_rt(instruction), read_u32(address));
+}
+
+void CPU::lbu(const u32 instruction)
+{
+    write_register_delayed(get_rt(instruction), read_u8(get_address(instruction)));
+}
+
+void CPU::lhu(const u32 instruction)
+{
+    const u32 address = get_address(instruction);
+    if ((address & 1) != 0)
+    {
+        dbg("TODO: misaligned access");
+        exit(1);
+    }
+
+    write_register_delayed(get_rt(instruction), read_u16(address));
+}
+
+void CPU::lwr(const u32 instruction)
+{
+    const u32 address = get_address(instruction);
+    const u32 rt = get_rt(instruction);
+    const u32 existing = read_register_for_lwl_and_lwr(rt);
+    const u32 from_mem = read_u32(address & !(0b111));
+    const u32 shift = 8 * (address & 3);
+    const u32 mask = 0xffffffff >> shift;
+    write_register_delayed(rt, (existing & !mask) | (from_mem >> shift));
+}
+
+void CPU::sb(const u32 instruction)
+{
+    write_u8(get_address(instruction), (u8)registers[get_rt(instruction)]);
+}
+
+void CPU::sh(const u32 instruction)
+{
+    const u32 address = get_address(instruction);
+    if ((address & 1) != 0)
+    {
+        dbg("TODO: misaligned access");
+        exit(1);
+    }
+
+    write_u16(address, (u16)registers[get_rt(instruction)]);
+}
+
+void CPU::swl(const u32 instruction)
+{
+    const u32 address = get_address(instruction);
+    const u32 existing = read_u32(address & !(0b111));
+    const u32 reg = registers[get_rt(instruction)];
+    const u32 shift = 8 * ((address & 0b111) ^ 0b111);
+    const u32 mask = 0xffffffff >> shift;
+    write_u32(address & !(0b111), (existing & !mask) | (reg >> shift));
+}
+
+void CPU::sw(const u32 instruction)
+{
+    const u32 address = get_address(instruction);
+    if ((address & 0b111) != 0)
+    {
+        dbg("TODO: misaligned access");
+        exit(1);
+    }
+
+    write_u32(address, registers[get_rt(instruction)]);
+}
+
+void CPU::swr(const u32 instruction)
+{
+    const u32 address = get_address(instruction);
+    const u32 existing = read_u32(address & !(0b111));
+    const u32 reg = registers[get_rt(instruction)];
+    const u32 shift = 8 * (address & 0b111);
+    const u32 mask = 0xffffffff << shift;
+    write_u32(address & !(0b111), (existing & !mask) | (reg << shift));
+}
+
+void CPU::lwc0(const u32 instruction)
+{
+    dbg("todo");
+    exit(1);(void)instruction;
+}
+
+void CPU::lwc1(const u32 instruction)
+{
+    dbg("todo");
+    exit(1);(void)instruction;
+}
+
+void CPU::lwc2(const u32 instruction)
+{
+    dbg("todo");
+    exit(1);(void)instruction;
+}
+
+void CPU::lwc3(const u32 instruction)
+{
+    dbg("todo");
+    exit(1);(void)instruction;
+}
+
+void CPU::swc0(const u32 instruction)
+{
+    dbg("todo");
+    exit(1);(void)instruction;
+}
+
+void CPU::swc1(const u32 instruction)
+{
+    dbg("todo");
+    exit(1);(void)instruction;
+}
+
+void CPU::swc2(const u32 instruction)
+{
+    dbg("todo");
+    exit(1);(void)instruction;
+}
+
+void CPU::swc3(const u32 instruction)
+{
+    dbg("todo");
+    exit(1);(void)instruction;
+}
+
+void CPU::sll(const u32 instruction)
+{
+    registers[get_rd(instruction)] = registers[get_rt(instruction)] << get_shamt(instruction);
+}
+
+void CPU::srl(const u32 instruction)
+{
+    registers[get_rd(instruction)] = registers[get_rt(instruction)] >> get_shamt(instruction);
+}
+
+void CPU::sra(const u32 instruction)
+{
+    registers[get_rd(instruction)] = (u32)((i32)registers[get_rt(instruction)] << get_shamt(instruction));
+}
+
+void CPU::sllv(const u32 instruction)
+{
+    const u32 shift_amount = registers[get_rs(instruction)] & 0b11111;
+    registers[get_rd(instruction)] = registers[get_rt(instruction)] << shift_amount;
+}
+
+void CPU::srlv(const u32 instruction)
+{
+    const u32 shift_amount = registers[get_rs(instruction)] & 0b11111;
+    registers[get_rd(instruction)] = registers[get_rt(instruction)] >> shift_amount;
+}
+
+void CPU::srav(const u32 instruction)
+{
+    const u32 shift_amount = registers[get_rs(instruction)] & 0b11111;
+    registers[get_rd(instruction)] = (u32)((i32)registers[get_rt(instruction)] >> shift_amount);
+}
+
+void CPU::jr(const u32 instruction)
+{
+    branch_pc = registers[get_rs(instruction)];
+}
+
+void CPU::jalr(const u32 instruction)
+{
+    branch_pc = registers[get_rs(instruction)];
+    write_register(get_rd(instruction), pc + 4);
+}
+
+void CPU::syscall(const u32 instruction)
+{
+    dbg("todo");
+    exit(1);(void)instruction;
+}
+
+void CPU::_break(const u32 instruction)
+{
+    dbg("todo");
+    exit(1);(void)instruction;
+}
+
+void CPU::mfhi(const u32 instruction)
+{
+    registers[get_rd(instruction)] = hi;
+}
+
+void CPU::mthi(const u32 instruction)
+{
+    hi = registers[get_rs(instruction)];
+}
+
+void CPU::mflo(const u32 instruction)
+{
+    registers[get_rd(instruction)] = lo;
+}
+
+void CPU::mtlo(const u32 instruction)
+{
+    lo = registers[get_rs(instruction)];
+}
+
+void CPU::mult(const u32 instruction)
+{
+    const i64 a = (i64)(i32)registers[get_rs(instruction)];
+    const i64 b = (i64)(i32)registers[get_rt(instruction)];
+    const u64 ab = (u64)(a * b);
+    lo = (u32)ab;
+    hi = (u32)(ab >> 32);
+}
+
+void CPU::multu(const u32 instruction)
+{
+    const u64 a = registers[get_rs(instruction)];
+    const u64 b = registers[get_rt(instruction)];
+    const u64 ab = (u64)(a * b);
+    lo = (u32)ab;
+    hi = (u32)(ab >> 32);
+}
+
+void CPU::div(const u32 instruction)
+{
+    const i32 dividend = (i32)registers[get_rs(instruction)];
+    const i32 divisor = (i32)registers[get_rt(instruction)];
+
+    if (divisor == 0)
+    {
+        lo = dividend < 0 ? 1 : 0xffffffff;
+        hi = (u32)dividend;
+    }
+    else
+    {
+        lo = (u32)(dividend / divisor);
+        hi = (u32)(dividend % divisor);
+    }
+}
+
+void CPU::divu(const u32 instruction)
+{
+    const u32 dividend = registers[get_rs(instruction)];
+    const u32 divisor = registers[get_rt(instruction)];
+
+    if (divisor == 0)
+    {
+        lo = 0xffffffff;
+        hi = dividend;
+    }
+    else
+    {
+        lo = dividend / divisor;
+        hi = dividend % divisor;
+    }
+}
+
+void CPU::add(const u32 instruction)
+{
+    const u32 rs = registers[get_rs(instruction)];
+    const u32 rt = registers[get_rt(instruction)];
+    if (rs > std::numeric_limits<u32>::max() - rt)
+    {
+        dbg("TODO: overflow");
+        exit(1);
+    }
+    write_register(get_rd(instruction), rs + rt);
+}
+
+void CPU::addu(const u32 instruction)
+{
+    write_register(get_rd(instruction), registers[get_rs(instruction)] + registers[get_rt(instruction)]);
+}
+
+void CPU::sub(const u32 instruction)
+{
+    const i32 rs = (i32)registers[get_rs(instruction)];
+    const i32 rt = (i32)registers[get_rt(instruction)];
+    if ((rs < 0 && rt > std::numeric_limits<i32>::max() + rs) ||
+        (rs > 0 && rt < std::numeric_limits<i32>::max() + rs))
+    {
+        dbg("TODO: overflow");
+        exit(1);
+    }
+    write_register(get_rd(instruction), (u32)(rs - rt));
+}
+
+void CPU::subu(const u32 instruction)
+{
+    write_register(get_rd(instruction), registers[get_rs(instruction)] - registers[get_rt(instruction)]);
+}
+
+void CPU::_and(const u32 instruction)
+{
+    write_register(get_rd(instruction), registers[get_rs(instruction)] & registers[get_rt(instruction)]);
+}
+
+void CPU::_or(const u32 instruction)
+{
+    write_register(get_rd(instruction), registers[get_rs(instruction)] | registers[get_rt(instruction)]);
+}
+
+void CPU::_xor(const u32 instruction)
+{
+    write_register(get_rd(instruction), registers[get_rs(instruction)] ^ registers[get_rt(instruction)]);
+}
+
+void CPU::nor(const u32 instruction)
+{
+    write_register(get_rd(instruction), !(registers[get_rs(instruction)] | registers[get_rt(instruction)]));
+}
+
+void CPU::slt(const u32 instruction)
+{
+    const i32 rs = (i32)registers[get_rs(instruction)];
+    const i32 rt = (i32)registers[get_rt(instruction)];
+    write_register(get_rd(instruction), rs < rt ? 1 : 0);
+}
+
+void CPU::sltu(const u32 instruction)
+{
+    const u32 rs = registers[get_rs(instruction)];
+    const u32 rt = registers[get_rt(instruction)];
+    write_register(get_rd(instruction), rs < rt ? 1 : 0);
+}

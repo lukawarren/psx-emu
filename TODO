@@ -1,0 +1,4 @@
+- All the "TODO: bla" exceptions in CPU
+- Timing for MULT and MULTU
+- Timing for DIV and DIVU
+- CPU overflow (see TODOs)
