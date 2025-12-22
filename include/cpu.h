@@ -1,11 +1,11 @@
 #pragma once
-#include "common.h"
 #include "bus.h"
 
 class CPU
 {
 public:
-    void execute(const u32 instruction);
+    CPU();
+    void execute();
 
 private:
     /*
@@ -40,7 +40,8 @@ private:
     std::pair<u8, u32> delayed_load_next = {};
 
     // Branches are delayed by one - i.e. we run the next instruction, *then* branch
-    std::optional<u32> branch_pc = {};
+    u32 next_pc;
+    bool due_branch_delay = false;
 
     // Load delay
     void write_register(const u32 reg, const u32 value);
@@ -69,7 +70,10 @@ private:
     inline void branch(const u32 instruction, const bool condition, const bool link = false)
     {
         if (condition)
-            branch_pc = pc + get_offset(instruction);
+        {
+            next_pc = pc + get_offset(instruction);
+            due_branch_delay = true;
+        }
 
         if (link)
             write_register(31, pc + 4);

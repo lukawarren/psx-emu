@@ -1,11 +1,38 @@
 #include "cpu.h"
+#include "trace.h"
 
-void CPU::execute(const u32 instruction)
+CPU::CPU() : bus("../SCPH1001.bin")
+{
+    pc = 0xbfc00000;
+    next_pc = pc + 4;
+}
+
+void CPU::execute()
 {
     delayed_load_next.first = 0;
 
+    const auto process_load_delay = [&]()
+    {
+        registers[delayed_load.first] = delayed_load.second;
+        delayed_load = delayed_load_next;
+        registers[0] = 0;
+    };
+
+    // Check for misaligned access
+    if ((pc & 0b11) != 0)
+    {
+        dbg("TODO: misaligned address");
+        process_load_delay();
+        exit(1);
+    }
+
+    // Fetch opcode
+    // TODO: timing, I-cache, etc.
+    const u32 instruction = bus.read_u32(pc);
+    trace(instruction);
+
     // Decode
-    switch (instruction)
+    switch (instruction >> 26)
     {
         case 0x00:
             switch (instruction & 0b11111)
@@ -38,7 +65,11 @@ void CPU::execute(const u32 instruction)
                 case 0x27: nor(instruction);     break;
                 case 0x2a: slt(instruction);     break;
                 case 0x2b: sltu(instruction);    break;
-                default: dbg("TODO: reserved instruction exception"); exit(1); break;
+                default:
+                    dbg("TODO: reserved instruction exception (1)",
+                    dbg::hex(instruction >> 26));
+                    exit(1);
+                    break;
             }
         break;
 
@@ -94,15 +125,19 @@ void CPU::execute(const u32 instruction)
         case 0x39: swc1(instruction);   break;
         case 0x3a: swc2(instruction);   break;
         case 0x3b: swc3(instruction);   break;
-        default: dbg("TODO: reserved instruction exception"); exit(1); break;
+        default:
+            dbg("TODO: reserved instruction exception (2)",
+            dbg::hex(instruction >> 26));
+            exit(1);
+            break;
     }
 
-    // Process load delay
-    registers[delayed_load.first] = delayed_load.second;
-    delayed_load = delayed_load_next;
+    // Get next program counter
+    pc = next_pc;
+    next_pc = pc + 4;
+    due_branch_delay = false;
 
-    // Force R0 back, in-case it changed
-    registers[0] = 0;
+    process_load_delay();
 }
 
 void CPU::write_register(const u32 reg, const u32 value)
@@ -160,12 +195,14 @@ void CPU::write_u32(const u32 address, const u32 value)
 
 void CPU::j(const u32 instruction)
 {
-    branch_pc = get_jump_address(instruction);
+    next_pc = get_jump_address(instruction);
+    due_branch_delay = true;
 }
 
 void CPU::jal(const u32 instruction)
 {
-    branch_pc = get_jump_address(instruction);
+    next_pc = get_jump_address(instruction);
+    due_branch_delay = true;
     write_register(31, pc + 4);
 }
 
@@ -483,12 +520,14 @@ void CPU::srav(const u32 instruction)
 
 void CPU::jr(const u32 instruction)
 {
-    branch_pc = registers[get_rs(instruction)];
+    next_pc = registers[get_rs(instruction)];
+    due_branch_delay = true;
 }
 
 void CPU::jalr(const u32 instruction)
 {
-    branch_pc = registers[get_rs(instruction)];
+    next_pc = registers[get_rs(instruction)];
+    due_branch_delay = true;
     write_register(get_rd(instruction), pc + 4);
 }
 

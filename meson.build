@@ -37,7 +37,9 @@ pch = 'include/common.h'
 # Sources
 src_files = files(
   'src/main.cpp',
-  'src/cpu.cpp'
+  'src/cpu.cpp',
+  'src/bus.cpp',
+  'src/trace.cpp'
 )
 
 # Executable
