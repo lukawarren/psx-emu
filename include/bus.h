@@ -36,8 +36,21 @@ public:
     void write_u16(const u32 address, const u16 value);
     void write_u32(const u32 address, const u32 value);
 
+    u32 i_stat; // Interrupt status register
+    u32 i_mask; // Interrupt mask register
+    u32 timer_0;
+    u32 timer_1;
+    u32 timer_2;
+    u32 timer_0_target;
+    u32 timer_1_target;
+    u32 timer_2_target;
+
 private:
     void read_from_file(u8* buffer, const std::string& filename);
+    u16 io_read_u16(const u32 address);
+    u32 io_read_u32(const u32 address);
+    void io_write_u16(const u32 address, const u16 value);
+    void io_write_u32(const u32 address, const u32 value);
 
     u8 bios[4096 * 1024]; // 4 KB
     u8 ram[2 * 1024 * 1024]; // 2 MB

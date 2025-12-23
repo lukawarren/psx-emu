@@ -40,21 +40,7 @@ void CPU::execute()
     // TODO: timing, I-cache, etc.
     const u32 instruction = bus.read_u32(pc);
     previous_pc = pc;
-
-    // trace(instruction);
-    // static int i = 0;
-    // if (i < 2000000)
-    // {
-    //     if (i >= 1000000) {
-    //         printf("%u %u %u %u\n", delayed_load.first, delayed_load.second, delayed_load_next.first, delayed_load_next.second);
-    //         printf("opcode %08X at PC %08X\n", instruction, pc);
-    //         for (const u32 r : registers)
-    //             printf("%08X\n", r);
-    //         printf("%u\n", read_u32(0xB0));
-    //     }
-    //     i++;
-    // }
-    // else exit(1);
+    trace(instruction);
 
     // Get next program counter
     pc = next_pc;
@@ -632,6 +618,7 @@ void CPU::jalr(const u32 instruction)
 
 void CPU::syscall(const u32 instruction)
 {
+    (void)instruction;
     raise_exception(Exception::Syscall);
 }
 
