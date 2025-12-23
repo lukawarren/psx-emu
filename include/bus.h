@@ -39,5 +39,6 @@ public:
 private:
     void read_from_file(u8* buffer, const std::string& filename);
 
-    u8 bios[4096 * 1024];
+    u8 bios[4096 * 1024]; // 4 KB
+    u8 ram[2 * 1024 * 1024]; // 2 MB
 };

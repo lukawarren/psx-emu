@@ -90,10 +90,22 @@ void trace(u32 instruction)
         case 0x0d: printf("ori %s, %s, 0x%x\n", reg_name((instruction >> 16) & 0x1F), reg_name((instruction >> 21) & 0x1F), instruction & 0xFFFF); break;
         case 0x0e: printf("xori %s, %s, 0x%x\n", reg_name((instruction >> 16) & 0x1F), reg_name((instruction >> 21) & 0x1F), instruction & 0xFFFF); break;
         case 0x0f: printf("lui %s, 0x%x\n", reg_name((instruction >> 16) & 0x1F), instruction & 0xFFFF); break;
-        case 0x10: printf("cop0 0x%x\n", instruction & 0x03FFFFFF); break;
-        case 0x11: printf("cop1 0x%x\n", instruction & 0x03FFFFFF); break;
-        case 0x12: printf("cop2 0x%x\n", instruction & 0x03FFFFFF); break;
-        case 0x13: printf("cop3 0x%x\n", instruction & 0x03FFFFFF); break;
+
+        case 0x10:
+        case 0x11:
+        case 0x12:
+        case 0x13:
+        {
+            const u32 bits = (instruction >> 21) & 0x1f;
+            if (bits == 0x00) printf("mfcz\n");
+            else if (bits == 0x02) printf("cfcz\n");
+            else if (bits == 0x04) printf("mtcz\n");
+            else if (bits == 0x06) printf("ctcz\n");
+            else if (bits >= 0x10 && bits <= 0x1f) printf("copz\n");
+            else printf("UNKNOWN_OPCODE 0x%x\n", opcode);
+        }
+        break;
+
         case 0x20: printf("lb %s, 0x%x(%s)\n", reg_name((instruction >> 16) & 0x1F), instruction & 0xFFFF, reg_name((instruction >> 21) & 0x1F)); break;
         case 0x21: printf("lh %s, 0x%x(%s)\n", reg_name((instruction >> 16) & 0x1F), instruction & 0xFFFF, reg_name((instruction >> 21) & 0x1F)); break;
         case 0x22: printf("lwl %s, 0x%x(%s)\n", reg_name((instruction >> 16) & 0x1F), instruction & 0xFFFF, reg_name((instruction >> 21) & 0x1F)); break;

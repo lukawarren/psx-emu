@@ -1,5 +1,6 @@
 #pragma once
 #include "bus.h"
+#include "cp0.h"
 
 class CPU
 {
@@ -30,6 +31,7 @@ private:
     u32 hi;
     u32 lo;
     Bus bus;
+    CP0 cp0;
 
     /*
         Note that due to "load delay", load instructions are async and so the
@@ -58,6 +60,7 @@ private:
     inline u32 get_offset(const u32 instruction) { return ((u32)((i16)instruction)) << 2; }
     inline u32 get_address(const u32 instruction) { return (u32)((i32)registers[get_rs(instruction)] + (i32)get_signed_immediate(instruction)); }
     inline u32 get_shamt(const u32 instruction) { return (instruction >> 6) & 0b11111; }
+    inline u32 get_coprocessor(const u32 instruction) { return (instruction >> 26) & 0b11; }
 
     // Bus
     u8 read_u8(const u32 address);
@@ -97,10 +100,11 @@ private:
     void ori    (const u32 instruction);
     void xori   (const u32 instruction);
     void lui    (const u32 instruction);
-    void cop0   (const u32 instruction);
-    void cop1   (const u32 instruction);
-    void cop2   (const u32 instruction);
-    void cop3   (const u32 instruction);
+    void mfcz   (const u32 instruction);
+    void cfcz   (const u32 instruction);
+    void mtcz   (const u32 instruction);
+    void ctcz   (const u32 instruction);
+    void copz   (const u32 instruction);
     void lb     (const u32 instruction);
     void lh     (const u32 instruction);
     void lwl    (const u32 instruction);

@@ -5,6 +5,7 @@ CPU::CPU() : bus("../SCPH1001.bin")
 {
     pc = 0xbfc00000;
     next_pc = pc + 4;
+    registers[0] = 0;
 }
 
 void CPU::execute()
@@ -13,15 +14,23 @@ void CPU::execute()
 
     const auto process_load_delay = [&]()
     {
-        registers[delayed_load.first] = delayed_load.second;
-        delayed_load = delayed_load_next;
-        registers[0] = 0;
+        if (delayed_load.first != 0)
+        {
+            registers[delayed_load.first] = delayed_load.second;
+            delayed_load.first = 0;
+        }
+
+        if (delayed_load_next.first != 0)
+        {
+            delayed_load = delayed_load_next;
+            delayed_load_next = {};
+        }
     };
 
     // Check for misaligned access
     if ((pc & 0b11) != 0)
     {
-        dbg("TODO: misaligned address");
+        dbg("TODO: misaligned program counter", dbg::hex(pc));
         process_load_delay();
         exit(1);
     }
@@ -29,7 +38,20 @@ void CPU::execute()
     // Fetch opcode
     // TODO: timing, I-cache, etc.
     const u32 instruction = bus.read_u32(pc);
-    trace(instruction);
+    // trace(instruction);
+    // static int i = 0;
+    // if (i < 2000000)
+    // {
+    //     if (i >= 1000000) {
+    //         printf("%u %u %u %u\n", delayed_load.first, delayed_load.second, delayed_load_next.first, delayed_load_next.second);
+    //         printf("opcode %08X at PC %08X\n", instruction, pc);
+    //         for (const u32 r : registers)
+    //             printf("%08X\n", r);
+    //         printf("%u\n", read_u32(0xB0));
+    //     }
+    //     i++;
+    // }
+    // else exit(1);
 
     // Get next program counter
     pc = next_pc;
@@ -71,8 +93,7 @@ void CPU::execute()
                 case 0x2a: slt(instruction);     break;
                 case 0x2b: sltu(instruction);    break;
                 default:
-                    dbg("TODO: reserved instruction exception (1)",
-                    dbg::hex(instruction & 0b11111));
+                    dbg("TODO: reserved instruction exception (1)", dbg::hex(instruction & 0b111111));
                     exit(1);
                     break;
             }
@@ -106,10 +127,27 @@ void CPU::execute()
         case 0x0d: ori(instruction);    break;
         case 0x0e: xori(instruction);   break;
         case 0x0f: lui(instruction);    break;
-        case 0x10: cop0(instruction);   break;
-        case 0x11: cop1(instruction);   break;
-        case 0x12: cop2(instruction);   break;
-        case 0x13: cop3(instruction);   break;
+
+        case 0x10:
+        case 0x11:
+        case 0x12:
+        case 0x13:
+        {
+            const u32 bits = (instruction >> 21) & 0x1f;
+            if (bits == 0x00) mfcz(instruction);
+            else if (bits == 0x02) cfcz(instruction);
+            else if (bits == 0x04) mtcz(instruction);
+            else if (bits == 0x06) ctcz(instruction);
+            else if (bits >= 0x10 && bits <= 0x1f) copz(instruction);
+            else
+            {
+                dbg("TODO: reserved instruction exception (3)", dbg::hex(bits));
+                exit(1);
+                break;
+            }
+        }
+        break;
+
         case 0x20: lb(instruction);     break;
         case 0x21: lh(instruction);     break;
         case 0x22: lwl(instruction);    break;
@@ -131,8 +169,7 @@ void CPU::execute()
         case 0x3a: swc2(instruction);   break;
         case 0x3b: swc3(instruction);   break;
         default:
-            dbg("TODO: reserved instruction exception (2)",
-            dbg::hex(instruction >> 26));
+            dbg("TODO: reserved instruction exception (2)", dbg::hex(instruction >> 26));
             exit(1);
             break;
     }
@@ -142,6 +179,7 @@ void CPU::execute()
 
 void CPU::write_register(const u32 reg, const u32 value)
 {
+    if (reg == 0) return;
     registers[reg] = value;
 
     // Overwrite any delayed loads
@@ -151,6 +189,7 @@ void CPU::write_register(const u32 reg, const u32 value)
 
 void CPU::write_register_delayed(const u32 reg, const u32 value)
 {
+    if (reg == 0) return;
     delayed_load_next = { reg, value };
 
     // Cancel the one that came before
@@ -180,16 +219,22 @@ u32 CPU::read_u32(const u32 address)
 
 void CPU::write_u8(const u32 address, const u8 value)
 {
+    // TODO
+    if (cp0.isolate_cache()) return;
     bus.write_u8(address, value);
 }
 
 void CPU::write_u16(const u32 address, const u16 value)
 {
+    // TODO
+    if (cp0.isolate_cache()) return;
     bus.write_u16(address, value);
 }
 
 void CPU::write_u32(const u32 address, const u32 value)
 {
+    // TODO
+    if (cp0.isolate_cache()) return;
     bus.write_u32(address, value);
 }
 
@@ -296,28 +341,53 @@ void CPU::lui(const u32 instruction)
     write_register(get_rt(instruction), instruction << 16);
 }
 
-void CPU::cop0(const u32 instruction)
+void CPU::mfcz(const u32 instruction)
 {
-    dbg("TODO: cop0");
+    const u32 reg = get_rd(instruction);
+    u32 value;
+
+    switch (get_coprocessor(instruction))
+    {
+        case 0: value = cp0.read_register(reg); break;
+        default: dbg("TODO: unknown co-processor"); exit(1); break;
+    }
+
+    write_register_delayed(get_rt(instruction), value);
+}
+
+void CPU::cfcz(const u32 instruction)
+{
+    dbg("todo");
+    exit(1);
     (void)instruction;
 }
 
-void CPU::cop1(const u32 instruction)
+void CPU::mtcz(const u32 instruction)
 {
-    dbg("todo");
-    exit(1);(void)instruction;
+    const u32 reg = get_rd(instruction);
+    const u32 value = registers[get_rt(instruction)];
+
+    switch (get_coprocessor(instruction))
+    {
+        case 0: cp0.write_register(reg, value); break;
+        default: dbg("TODO: unknown co-processor"); exit(1); break;
+    }
 }
 
-void CPU::cop2(const u32 instruction)
+void CPU::ctcz(const u32 instruction)
 {
     dbg("todo");
-    exit(1);(void)instruction;
+    exit(1);
+    (void)instruction;
 }
 
-void CPU::cop3(const u32 instruction)
+void CPU::copz(const u32 instruction)
 {
-    dbg("todo");
-    exit(1);(void)instruction;
+    switch (get_coprocessor(instruction))
+    {
+        case 0: cp0.execute(instruction & 0xffffff); break;
+        default: dbg("TODO: unknown co-processor"); exit(1); break;
+    }
 }
 
 void CPU::lb(const u32 instruction)
