@@ -43,6 +43,7 @@ private:
 
     // Branches are delayed by one - i.e. we run the next instruction, *then* branch
     u32 next_pc;
+    u32 previous_pc;
     bool due_branch_delay = false;
 
     // Load delay
@@ -69,6 +70,16 @@ private:
     void write_u8(const u32 address, const u8 value);
     void write_u16(const u32 address, const u16 value);
     void write_u32(const u32 address, const u32 value);
+
+    // Exceptions
+    enum class Exception
+    {
+        AddressErrorLoad = 0x4,
+        AddressErrorStore = 0x5,
+        Syscall = 0x8,
+        ArithmeticOverflow = 0xc
+    };
+    void raise_exception(const Exception exception);
 
     inline void branch(const u32 instruction, const bool condition, const bool link = false)
     {

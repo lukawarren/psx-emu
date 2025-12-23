@@ -30,7 +30,8 @@ void CPU::execute()
     // Check for misaligned access
     if ((pc & 0b11) != 0)
     {
-        dbg("TODO: misaligned program counter", dbg::hex(pc));
+        previous_pc = pc;
+        raise_exception(Exception::AddressErrorLoad);
         process_load_delay();
         exit(1);
     }
@@ -38,6 +39,8 @@ void CPU::execute()
     // Fetch opcode
     // TODO: timing, I-cache, etc.
     const u32 instruction = bus.read_u32(pc);
+    previous_pc = pc;
+
     // trace(instruction);
     // static int i = 0;
     // if (i < 2000000)
@@ -238,6 +241,32 @@ void CPU::write_u32(const u32 address, const u32 value)
     bus.write_u32(address, value);
 }
 
+void CPU::raise_exception(const Exception exception)
+{
+    const u32 handler = cp0.boot_exception_vectors() ? 0xbfc00180 : 0x80000080;
+    dbg("WARNING: Exception raised", dbg::hex((u32)exception));
+
+    // Shift bits [5:0] two places to the left
+    const u32 mode = cp0.sr & 0x3f;
+    cp0.sr &= ~0x3fU;
+    cp0.sr |= (mode << 2) & 0x3f;
+
+    // Update CAUSE register with exception code
+    cp0.cause = (u32)exception << 2;
+
+    // Point EPC to the PC
+    cp0.epc = previous_pc - (due_branch_delay ? 4 : 0);
+
+    // Set BD bit if were in a branch delay
+    if (due_branch_delay) cp0.cause |= (1U << 31);
+    else cp0.cause &= ~(1U << 31);
+
+    // No branch delay; jump straight there
+    pc = handler;
+    next_pc = pc + 4;
+    due_branch_delay = false;
+}
+
 void CPU::j(const u32 instruction)
 {
     next_pc = get_jump_address(instruction);
@@ -299,8 +328,8 @@ void CPU::addi(const u32 instruction)
     if ((rs > 0 && imm > std::numeric_limits<i32>::max() - rs) ||
         (rs < 0 && imm < std::numeric_limits<i32>::min() - rs))
     {
-        dbg("TODO: overflow");
-        exit(1);
+        raise_exception(Exception::ArithmeticOverflow);
+        return;
     }
 
     write_register(get_rt(instruction), (u32)(rs + imm));
@@ -400,8 +429,8 @@ void CPU::lh(const u32 instruction)
     const u32 address = get_address(instruction);
     if ((address & 1) != 0)
     {
-        dbg("TODO: misaligned access");
-        exit(1);
+        raise_exception(Exception::AddressErrorLoad);
+        return;
     }
 
     write_register_delayed(get_rt(instruction), (u32)(i32)(i16)read_u16(address));
@@ -423,8 +452,8 @@ void CPU::lw(const u32 instruction)
     const u32 address = get_address(instruction);
     if ((address & 0b11) != 0)
     {
-        dbg("TODO: misaligned access");
-        exit(1);
+        raise_exception(Exception::AddressErrorLoad);
+        return;
     }
 
     write_register_delayed(get_rt(instruction), read_u32(address));
@@ -440,8 +469,8 @@ void CPU::lhu(const u32 instruction)
     const u32 address = get_address(instruction);
     if ((address & 1) != 0)
     {
-        dbg("TODO: misaligned access");
-        exit(1);
+        raise_exception(Exception::AddressErrorLoad);
+        return;
     }
 
     write_register_delayed(get_rt(instruction), read_u16(address));
@@ -468,8 +497,8 @@ void CPU::sh(const u32 instruction)
     const u32 address = get_address(instruction);
     if ((address & 1) != 0)
     {
-        dbg("TODO: misaligned access");
-        exit(1);
+        raise_exception(Exception::AddressErrorStore);
+        return;
     }
 
     write_u16(address, (u16)registers[get_rt(instruction)]);
@@ -490,8 +519,8 @@ void CPU::sw(const u32 instruction)
     const u32 address = get_address(instruction);
     if ((address & 0b11) != 0)
     {
-        dbg("TODO: misaligned access");
-        exit(1);
+        raise_exception(Exception::AddressErrorStore);
+        return;
     }
 
     write_u32(address, registers[get_rt(instruction)]);
@@ -603,8 +632,7 @@ void CPU::jalr(const u32 instruction)
 
 void CPU::syscall(const u32 instruction)
 {
-    dbg("todo");
-    exit(1);(void)instruction;
+    raise_exception(Exception::Syscall);
 }
 
 void CPU::_break(const u32 instruction)
@@ -692,8 +720,8 @@ void CPU::add(const u32 instruction)
     if ((rs > 0  && rt > std::numeric_limits<i32>::max() - rs) ||
         (rs < 0 && rt > std::numeric_limits<i32>::min() - rs))
     {
-        dbg("TODO: overflow");
-        exit(1);
+        raise_exception(Exception::ArithmeticOverflow);
+        return;
     }
     write_register(get_rd(instruction), (u32)(rs + rt));
 }
@@ -710,8 +738,8 @@ void CPU::sub(const u32 instruction)
     if ((rs < 0 && rt > std::numeric_limits<i32>::max() + rs) ||
         (rs > 0 && rt < std::numeric_limits<i32>::min() + rs))
     {
-        dbg("TODO: overflow");
-        exit(1);
+        raise_exception(Exception::ArithmeticOverflow);
+        return;
     }
     write_register(get_rd(instruction), (u32)(rs - rt));
 }

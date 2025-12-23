@@ -4,6 +4,8 @@ class CP0
 {
 public:
     u32 sr; // Status register
+    u32 cause; // Cause of exception
+    u32 epc; // Exception program counter
 
     void write_register(const u32 reg, const u32 value)
     {
@@ -25,10 +27,8 @@ public:
                 else dbg("CP0 isolate cache bit unset");
                 break;
 
-            case 13:
-                dbg("TODO: CP0 CAUSE register");
-                if (value != 0) exit(1);
-                break;
+            case 13: cause = value; break;
+            case 14: epc = value; break;
 
             default:
                 dbg("TODO: unknown CP0 register", reg, value);
@@ -41,6 +41,8 @@ public:
         switch (reg)
         {
             case 12: return sr;
+            case 13: return cause;
+            case 14: return epc;
             default: dbg("TODO: unknown CP0 register", reg); exit(1);
         }
 
@@ -61,13 +63,11 @@ public:
             }
 
             default:
-                dbg("TODO: unknown CP0 operation", dbg::hex(opcode & 0x3f));
+                dbg("TODO: unsupported PSX CP0 operation", dbg::hex(opcode & 0x3f));
                 exit(1);
         }
     }
 
-    inline bool isolate_cache() const
-    {
-        return sr & (1 << 16);
-    }
+    inline bool isolate_cache() { return (sr & (1 << 16)) != 0; }
+    inline bool boot_exception_vectors() const { return (sr & (1 << 22)) != 0; }
 };
