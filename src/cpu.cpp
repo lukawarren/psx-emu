@@ -31,6 +31,11 @@ void CPU::execute()
     const u32 instruction = bus.read_u32(pc);
     trace(instruction);
 
+    // Get next program counter
+    pc = next_pc;
+    next_pc = pc + 4;
+    due_branch_delay = false;
+
     // Decode
     switch (instruction >> 26)
     {
@@ -79,7 +84,7 @@ void CPU::execute()
                 case 0x10: bltzal(instruction); break;
                 case 0x11: bgezal(instruction); break;
                 default:
-                    if (instruction & 0b1000000000000000)
+                    if ((instruction & (1 << 16)) == 0)
                         bltz(instruction);
                     else
                         bgez(instruction);
@@ -131,11 +136,6 @@ void CPU::execute()
             exit(1);
             break;
     }
-
-    // Get next program counter
-    pc = next_pc;
-    next_pc = pc + 4;
-    due_branch_delay = false;
 
     process_load_delay();
 }
@@ -223,7 +223,7 @@ void CPU::blez(const u32 instruction)
 
 void CPU::bgtz(const u32 instruction)
 {
-    branch(instruction, (i32)registers[get_rs(instruction)] >= 0);
+    branch(instruction, (i32)registers[get_rs(instruction)] > 0);
 }
 
 void CPU::bltzal(const u32 instruction)
@@ -248,7 +248,7 @@ void CPU::bgez(const u32 instruction)
 
 void CPU::addi(const u32 instruction)
 {
-    i32 rs = (i32)get_rs(instruction);
+    i32 rs = (i32)registers[get_rs(instruction)];
     i32 imm = get_signed_immediate(instruction);
 
     if ((rs > 0 && imm > std::numeric_limits<i32>::max() - rs) ||
@@ -263,7 +263,7 @@ void CPU::addi(const u32 instruction)
 
 void CPU::addiu(const u32 instruction)
 {
-    write_register(get_rt(instruction), registers[get_rs(instruction)] + get_immediate(instruction));
+    write_register(get_rt(instruction), registers[get_rs(instruction)] + (u32)get_signed_immediate(instruction));
 }
 
 void CPU::slti(const u32 instruction)
@@ -273,7 +273,7 @@ void CPU::slti(const u32 instruction)
 
 void CPU::sltiu(const u32 instruction)
 {
-    write_register(get_rt(instruction), registers[get_rs(instruction)] < get_immediate(instruction) ? 1 : 0);
+    write_register(get_rt(instruction), registers[get_rs(instruction)] < (u32)get_signed_immediate(instruction) ? 1 : 0);
 }
 
 void CPU::andi(const u32 instruction)
@@ -298,8 +298,8 @@ void CPU::lui(const u32 instruction)
 
 void CPU::cop0(const u32 instruction)
 {
-    dbg("todo");
-    exit(1);(void)instruction;
+    dbg("TODO: cop0");
+    (void)instruction;
 }
 
 void CPU::cop1(const u32 instruction)
@@ -343,7 +343,7 @@ void CPU::lwl(const u32 instruction)
     const u32 rt = get_rt(instruction);
     const u32 existing = read_register_for_lwl_and_lwr(rt);
     const u32 from_mem = read_u32(address & (~0b11U));
-    const u32 shift = 8 * ((address & 3) ^ 3);
+    const u32 shift = 8 * ((address & 0b11) ^ 0b11);
     const u32 mask = 0xffffffff << shift;
     write_register_delayed(rt, (existing & (~mask)) | (from_mem << shift));
 }
@@ -383,7 +383,7 @@ void CPU::lwr(const u32 instruction)
     const u32 rt = get_rt(instruction);
     const u32 existing = read_register_for_lwl_and_lwr(rt);
     const u32 from_mem = read_u32(address & (~0b11U));
-    const u32 shift = 8 * (address & 3);
+    const u32 shift = 8 * (address & 0b11);
     const u32 mask = 0xffffffff >> shift;
     write_register_delayed(rt, (existing & (~mask)) | (from_mem >> shift));
 }
@@ -487,35 +487,35 @@ void CPU::swc3(const u32 instruction)
 
 void CPU::sll(const u32 instruction)
 {
-    registers[get_rd(instruction)] = registers[get_rt(instruction)] << get_shamt(instruction);
+    write_register(get_rd(instruction), registers[get_rt(instruction)] << get_shamt(instruction));
 }
 
 void CPU::srl(const u32 instruction)
 {
-    registers[get_rd(instruction)] = registers[get_rt(instruction)] >> get_shamt(instruction);
+    write_register(get_rd(instruction), registers[get_rt(instruction)] >> get_shamt(instruction));
 }
 
 void CPU::sra(const u32 instruction)
 {
-    registers[get_rd(instruction)] = (u32)((i32)registers[get_rt(instruction)] >> get_shamt(instruction));
+    write_register(get_rd(instruction), (u32)((i32)registers[get_rt(instruction)] >> get_shamt(instruction)));
 }
 
 void CPU::sllv(const u32 instruction)
 {
     const u32 shift_amount = registers[get_rs(instruction)] & 0b11111;
-    registers[get_rd(instruction)] = registers[get_rt(instruction)] << shift_amount;
+    write_register(get_rd(instruction), registers[get_rt(instruction)] << shift_amount);
 }
 
 void CPU::srlv(const u32 instruction)
 {
     const u32 shift_amount = registers[get_rs(instruction)] & 0b11111;
-    registers[get_rd(instruction)] = registers[get_rt(instruction)] >> shift_amount;
+    write_register(get_rd(instruction), registers[get_rt(instruction)] >> shift_amount);
 }
 
 void CPU::srav(const u32 instruction)
 {
     const u32 shift_amount = registers[get_rs(instruction)] & 0b11111;
-    registers[get_rd(instruction)] = (u32)((i32)registers[get_rt(instruction)] >> shift_amount);
+    write_register(get_rd(instruction), (u32)((i32)registers[get_rt(instruction)] >> shift_amount));
 }
 
 void CPU::jr(const u32 instruction)
@@ -545,7 +545,7 @@ void CPU::_break(const u32 instruction)
 
 void CPU::mfhi(const u32 instruction)
 {
-    registers[get_rd(instruction)] = hi;
+    write_register(get_rd(instruction), hi);
 }
 
 void CPU::mthi(const u32 instruction)
@@ -555,7 +555,7 @@ void CPU::mthi(const u32 instruction)
 
 void CPU::mflo(const u32 instruction)
 {
-    registers[get_rd(instruction)] = lo;
+    write_register(get_rd(instruction), lo);
 }
 
 void CPU::mtlo(const u32 instruction)
