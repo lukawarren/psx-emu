@@ -49,7 +49,7 @@ u32 GPU::get_gpu_stat()
     value |= 1 << 26;
 
     // Ready to send VRAM to CPU
-    value |= 0 << 27;
+    value |= 1 << 27;
 
     // Ready to receive DMA block
     value |= 1 << 28;
@@ -83,6 +83,16 @@ void GPU::send_gp0_command(const u32 opcode)
                 gp0_input_state = GP0InputState::Normal;
             return;
         }
+
+        gp0_vram_to_cpu.header_count++;
+        return;
+    }
+
+    // Continuation of 0xC0 - transfer from CPU to VRAM
+    if (gp0_input_state == GP0InputState::CPUToVRAM)
+    {
+        if (gp0_vram_to_cpu.header_count == 1)
+            gp0_input_state = GP0InputState::Normal;
 
         gp0_vram_to_cpu.header_count++;
         return;
@@ -170,6 +180,15 @@ void GPU::send_gp0_command(const u32 opcode)
         return;
     }
 
+    // VRAM to CPU blit
+    if (command == 0xC0)
+    {
+        gp0_input_state = GP0InputState::CPUToVRAM;
+        gp0_vram_to_cpu.header_count = 0;
+        dbg("TODO: VRAM to CPU blit");
+        return;
+    }
+
     dbg("TODO: unknown GP0 command", dbg::hex(opcode), dbg::hex(command));
     exit(1);
 }
@@ -243,6 +262,13 @@ void GPU::send_gp1_command(const u32 opcode)
     if (command == 0x01)
     {
         dbg("TODO: reset GP1 command buffer");
+        return;
+    }
+
+    // Display enable
+    if (command == 0x03)
+    {
+        display_off = opcode & 1;
         return;
     }
 

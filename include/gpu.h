@@ -20,7 +20,8 @@ private:
     enum class GP0InputState
     {
         Normal,
-        VRAMToCPU
+        VRAMToCPU,
+        CPUToVRAM
     } gp0_input_state = GP0InputState::Normal;
 
     // GPO 0xA0 - VRAM to CPU
