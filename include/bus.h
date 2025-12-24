@@ -12,7 +12,6 @@
     1FC00000h 9FC00000h BFC00000h  512K   BIOS ROM (Kernel) (4096K max)
             FFFE0000h (in KSEG2)   0.5K   Internal CPU control registers (Cache Control)
 
-
     $00000000-$7FFFFFFF: KUSEG (2GB user memory)
     $80000000-$9FFFFFFF: KSEG0 (512MB cached kernel memory)
     $A0000000-$BFFFFFFF: KSEG1 (512MB uncached kernel memory)
@@ -75,4 +74,42 @@ private:
         // Bits 3, 7, 11, 15, ..., 27 (for channel 6)
         return ((dma_control >> (channel * 4 + 3)) & 0b1) != 0;
     }
+
+    struct DMAChannelControl
+    {
+        enum class TransferMode
+        {
+            Burst = 0,
+            Slice = 1,
+            LinkedList = 2
+        };
+
+        bool transfer_direction_is_to_device; // 0 = device to RAM, 1 = RAM to device
+        bool madr_increment_per_step; // 0 = +4, 1 = -4
+        bool burst_mode_enables_chopping;
+        TransferMode transfer_mode;
+        u8 chopping_dma_window_size;
+        u8 chopping_cpu_window_size;
+        bool start_transfer;
+        bool force_start_without_dreq;
+        bool mode_modifier;
+
+        DMAChannelControl(const u32 control)
+        {
+            transfer_direction_is_to_device = (control >> 0) & 0b1;
+            madr_increment_per_step = (control >> 1) & 0b1;
+            burst_mode_enables_chopping = (control >> 8) & 0b1;
+            transfer_mode = TransferMode((control >> 9) & 0b11);
+            chopping_dma_window_size = 1 << ((control >> 16) & 0b111);
+            chopping_cpu_window_size = 1 << ((control >> 20) & 0b111);
+            start_transfer = (control >> 24) & 0b1;
+            force_start_without_dreq = (control >> 28) & 0b1;
+            mode_modifier = (control >> 29) & 0b1;
+        }
+
+        static inline bool transfer_due(const u32 control)
+        {
+            return (control & (1 << 24)) != 0;
+        }
+    };
 };

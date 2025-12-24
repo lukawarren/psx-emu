@@ -6,6 +6,7 @@ GPU::GPU()
 
 u32 GPU::get_gpu_read()
 {
+    dbg("TODO: gpu_read");
     return 0;
 }
 
@@ -61,7 +62,6 @@ void GPU::send_gp0_command(const u32 opcode)
         texture_page_y_base_2 = ((opcode >> 11) & 0b1);
         textured_rectangle_x_flip = ((opcode >> 12) & 0b1);
         textured_rectangle_y_flip = ((opcode >> 13) & 0b1);
-        dbg("TODO: update GPUSTAT when GP0 E1h command performed");
         return;
     }
 
@@ -103,12 +103,12 @@ void GPU::send_gp1_command(const u32 opcode)
         display_area_y = 0;
 
         // GP1 0x06
-        display_x1 = 0x200;
-        display_x2 = 256 * 10;
+        display_range_x1 = 0x200;
+        display_range_x2 = 256 * 10;
 
         // GP1 0x07
-        display_y1 = 0x10;
-        display_y2 = 240;
+        display_range_y1 = 0x10;
+        display_range_y2 = 240;
 
         // GP1 0x08
         horizontal_resolution_1 = 0;
@@ -137,6 +137,30 @@ void GPU::send_gp1_command(const u32 opcode)
         return;
     }
 
+    // Start of display area (in VRAM)
+    if (command == 0x05)
+    {
+        display_area_x = opcode & 0b1111111111;
+        display_area_y = (opcode >> 10) & 0b111111111;
+        return;
+    }
+
+    // Horizontal display range (on screen)
+    if (command == 0x06)
+    {
+        display_range_x1 = opcode & 0b111111111111;
+        display_range_x2 = (opcode >> 10) & 0b111111111111;
+        return;
+    }
+
+    // Vertical display range (on screen)
+    if (command == 0x07)
+    {
+        display_range_y1 = opcode & 0b1111111111;
+        display_range_y2 = (opcode >> 10) & 0b1111111111;
+        return;
+    }
+
     // Display mode
     if (command == 0x08)
     {
@@ -152,4 +176,9 @@ void GPU::send_gp1_command(const u32 opcode)
 
     dbg("TODO: GP1 command", dbg::hex(command));
     exit(1);
+}
+
+void GPU::dma_send(const u32 data)
+{
+    printf("%u\n", data);
 }

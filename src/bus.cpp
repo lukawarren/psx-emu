@@ -11,10 +11,43 @@ Bus::Bus(const std::string& bios_path)
 
 void Bus::clock()
 {
-    if ((dma_channel_control_channel_2 & (1 << 24)) != 0)
+    // TODO: analyse priorities if multiple DMA channels are due
+    //       (on a tie, take 0 as lowest and 6 as highest priority)
+
+    if (get_dma_master_enable(2) && DMAChannelControl::transfer_due(dma_channel_control_channel_2))
     {
-        dbg("TODO: channel 2 DMA began");
-        exit(1);
+        // TODO: respect DREQ - right now just assume the target is ready
+        DMAChannelControl control(dma_channel_control_channel_2);
+
+        if (!control.transfer_direction_is_to_device ||
+            control.transfer_mode != DMAChannelControl::TransferMode::LinkedList)
+        {
+            dbg(
+                "TODO: unsupported DMAChannelControl configuration",
+                control.transfer_direction_is_to_device,
+                (u8)control.transfer_mode
+            );
+            exit(1);
+        }
+
+        u32 header_address = dma_base_address_channel_2 & 0b111111111111111111111111;
+
+        while (true)
+        {
+            // Linked list DMA - parse header
+            const u32 header = read_u32(header_address);
+            const u32 next_node_address = header & 0b111111111111111111111111;
+            const u32 extra_words = header >> 24;
+            const bool is_end_marker = next_node_address == 0xFFFFFF;
+
+            for (u32 i = 0; i < extra_words; i++)
+                gpu.dma_send(read_u32(header_address + (i + 1) * 4));
+
+            if (is_end_marker)
+                break;
+
+            header_address = next_node_address;
+        }
     }
 }
 
@@ -206,10 +239,8 @@ u32 Bus::io_read_u32(const u32 address)
         return dma_interrupt;
 
     // GPU
-    if (address == 0x1F801810)
-        { dbg("TODO: gpu_read read"); return gpu.get_gpu_read(); }
-    if (address == 0x1F801814)
-        { dbg("TODO: gpu_stat read"); return gpu.get_gpu_stat(); }
+    if (address == 0x1F801810) return gpu.get_gpu_read();
+    if (address == 0x1F801814) return gpu.get_gpu_stat();
 
     // DMA channels
     if (address == 0x1F8010A0) { return dma_base_address_channel_2; }

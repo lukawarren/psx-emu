@@ -4,12 +4,17 @@ class GPU
 {
 public:
     GPU();
-    void send_gp0_command(const u32 opcode);
-    void send_gp1_command(const u32 opcode);
 
     // Bus registers - read for receiving responses and stat as a status register
     u32 get_gpu_read();
     u32 get_gpu_stat();
+
+    // Sent via I/O from CPU
+    void send_gp0_command(const u32 opcode);
+    void send_gp1_command(const u32 opcode);
+
+    // DMA
+    void dma_send(const u32 data);
 
 private:
     // GP0 0xE0 settings
@@ -30,10 +35,10 @@ private:
     bool irq_request;
     u8 dma_direction;
     u32 display_address;
-    u16 display_x1;
-    u16 display_x2;
-    u16 display_y1;
-    u16 display_y2;
+    u16 display_range_x1;
+    u16 display_range_x2;
+    u16 display_range_y1;
+    u16 display_range_y2;
     u8 display_mode;
 
     // GP1 0x05 settings
