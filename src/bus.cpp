@@ -9,6 +9,15 @@ Bus::Bus(const std::string& bios_path)
     read_from_file(bios, bios_path);
 }
 
+void Bus::clock()
+{
+    if ((dma_channel_control_channel_2 & (1 << 24)) != 0)
+    {
+        dbg("TODO: channel 2 DMA began");
+        exit(1);
+    }
+}
+
 u8 Bus::read_u8(const u32 address)
 {
     // Main RAM
@@ -137,6 +146,26 @@ void Bus::read_from_file(u8* buffer, const std::string& filename)
 
 u16 Bus::io_read_u16(const u32 address)
 {
+    // I_STAT
+    if (address == 0x1F801070)
+        return (u16)i_stat;
+
+    // I_MASK
+    if (address == 0x1F801074)
+        return (u16)i_mask;
+
+    // SPU voice registers
+    if (address >= 0x1F801C00 && address <= 0x1F801D7E)
+        return 0;
+
+    // SPU control registers
+    if (address >= 0x1F801D80 && address <= 0x1F801DBC)
+        return 0;
+
+    // SPU reverb configuration area - NOTE: should be DFC, not DFE?
+    if (address >= 0x1F801DC0 && address <= 0x1F801DFE)
+        return 0;
+
     dbg("TODO: unrecognised I/O read", dbg::hex(address));
     exit(1);
 }
@@ -156,15 +185,78 @@ u32 Bus::io_read_u32(const u32 address)
     if (address == 0x1F801110) { dbg("TODO: accurate timer values"); return timer_1; }
     if (address == 0x1F801120) { dbg("TODO: accurate timer values"); return timer_2; }
 
+    // SPU voice registers
+    if (address >= 0x1F801C00 && address <= 0x1F801D7E)
+        return 0;
+
+    // SPU control registers
+    if (address >= 0x1F801D80 && address <= 0x1F801DBC)
+        return 0;
+
+    // SPU reverb configuration area - NOTE: should be DFC, not DFE?
+    if (address >= 0x1F801DC0 && address <= 0x1F801DFE)
+        return 0;
+
+    // DMA control
+    if (address == 0x1F8010F0)
+        return dma_control;
+
+    // DMA interrupt
+    if (address == 0x1F8010F4)
+        return dma_interrupt;
+
+    // GPU
+    if (address == 0x1F801810)
+        { dbg("TODO: gpu_read read"); return gpu.get_gpu_read(); }
+    if (address == 0x1F801814)
+        { dbg("TODO: gpu_stat read"); return gpu.get_gpu_stat(); }
+
+    // DMA channels
+    if (address == 0x1F8010A0) { return dma_base_address_channel_2; }
+    if (address == 0x1F8010A4) { return dma_block_control_channel_2; }
+    if (address == 0x1F8010A8) { return dma_channel_control_channel_2; }
+    if (address == 0x1F8010E0) { dbg("TODO: channel 6 DMA write?"); return 0; }
+    if (address == 0x1F8010E4) { dbg("TODO: channel 6 DMA write?"); return 0; }
+    if (address == 0x1F8010E8) { dbg("TODO: channel 6 DMA write?"); return 0; }
+
     dbg("TODO: unrecognised I/O read", dbg::hex(address));
     exit(1);
 }
 
 void Bus::io_write_u16(const u32 address, const u16 value)
 {
+    // SPU voice registers
+    if (address >= 0x1F801C00 && address <= 0x1F801D7E)
+        return;
+
     // SPU control registers (some are 16-bits wide as opposed to 32 so skip here)
     if (address >= 0x1F801D80 && address <= 0x1F801DBC)
         return;
+
+    // SPU reverb configuration area - NOTE: should be DFC, not DFE?
+    if (address >= 0x1F801DC0 && address <= 0x1F801DFE)
+        return;
+
+    // I_STAT - NOTE: writing is to "acknowledge"
+    if (address == 0x1F801070)
+    {
+        i_stat = value;
+        if (value != 0)
+        {
+            dbg("TODO: unsupported i_stat value", dbg::hex(value));
+            exit(1);
+        }
+        return;
+    }
+
+    // I_MASK
+    if (address == 0x1F801074)
+    {
+        i_mask = value;
+        if (value != 0)
+            dbg("TODO: unsupported i_mask value", dbg::hex(value));
+        return;
+    }
 
     dbg("TODO: unrecognised I/O write", dbg::hex(address), dbg::hex(value));
     exit(1);
@@ -202,8 +294,16 @@ void Bus::io_write_u32(const u32 address, const u32 value)
     // CDROM delay / size
     if (address == 0x1F801018) return;
 
-    // SPU control registers (some are 16-bits wide as opposed to 32 so skip here)
+    // SPU voice registers
+    if (address >= 0x1F801C00 && address <= 0x1F801D7E)
+        return;
+
+    // SPU control registers
     if (address >= 0x1F801D80 && address <= 0x1F801DBC)
+        return;
+
+    // SPU reverb configuration area - NOTE: should be DFC, not DFE?
+    if (address >= 0x1F801DC0 && address <= 0x1F801DFE)
         return;
 
     // Cache configuration register
@@ -230,10 +330,7 @@ void Bus::io_write_u32(const u32 address, const u32 value)
     {
         i_mask = value;
         if (value != 0)
-        {
             dbg("TODO: unsupported i_mask value", dbg::hex(value));
-            exit(1);
-        }
         return;
     }
 
@@ -241,30 +338,21 @@ void Bus::io_write_u32(const u32 address, const u32 value)
     if (address == 0x1F801104)
     {
         if (value != 0)
-        {
             dbg("TODO: unsupported timer 0 counter mode", dbg::hex(value));
-            exit(1);
-        }
         timer_0 = 0;
         return;
     }
     if (address == 0x1F801114)
     {
         if (value != 0)
-        {
             dbg("TODO: unsupported timer 1 counter mode", dbg::hex(value));
-            exit(1);
-        }
         timer_1 = 0;
         return;
     }
     if (address == 0x1F801124)
     {
         if (value != 0)
-        {
             dbg("TODO: unsupported timer 2 counter mode", dbg::hex(value));
-            exit(1);
-        }
         timer_2 = 0;
         return;
     }
@@ -278,6 +366,36 @@ void Bus::io_write_u32(const u32 address, const u32 value)
     if (address == 0x1F801108) { timer_0_target = value; return; }
     if (address == 0x1F801118) { timer_1_target = value; return; }
     if (address == 0x1F801128) { timer_2_target = value; return; }
+
+    // DMA control
+    if (address == 0x1F8010F0)
+    {
+        dma_control = value;
+        for (u8 i = 0; i <= 6; i++)
+            if (i != 2 && get_dma_master_enable(i))
+                dbg("TODO: DMA enabled for unsupport channel", (u32)i);
+        return;
+    }
+
+    // DMA interrupt
+    if (address == 0x1F8010F4)
+    {
+        // Writing bits 24-30 will set them to 0 if a 1 is written
+        dma_interrupt = value & 0b01111111000000000000000000000000;
+        return;
+    }
+
+    // DMA channels
+    if (address == 0x1F8010A0) { dma_base_address_channel_2 = value; return; }
+    if (address == 0x1F8010A4) { dma_block_control_channel_2 = value; return; }
+    if (address == 0x1F8010A8) { dma_channel_control_channel_2 = value; return; }
+    if (address == 0x1F8010E0) { dbg("TODO: channel 6 DMA write?"); return; }
+    if (address == 0x1F8010E4) { dbg("TODO: channel 6 DMA write?"); return; }
+    if (address == 0x1F8010E8) { dbg("TODO: channel 6 DMA write?"); return; }
+
+    // GPU
+    if (address == 0x1F801810) { gpu.send_gp0_command(value); return; }
+    if (address == 0x1F801814) { gpu.send_gp1_command(value); return; }
 
     dbg("TODO: unrecognised I/O write", dbg::hex(address), dbg::hex(value));
     exit(1);

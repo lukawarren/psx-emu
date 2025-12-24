@@ -40,7 +40,10 @@ void CPU::execute()
     // TODO: timing, I-cache, etc.
     const u32 instruction = bus.read_u32(pc);
     previous_pc = pc;
+
+#if 0
     trace(instruction);
+#endif
 
     // Get next program counter
     pc = next_pc;
@@ -164,6 +167,8 @@ void CPU::execute()
     }
 
     process_load_delay();
+
+    bus.clock();
 }
 
 void CPU::write_register(const u32 reg, const u32 value)
@@ -230,7 +235,8 @@ void CPU::write_u32(const u32 address, const u32 value)
 void CPU::raise_exception(const Exception exception)
 {
     const u32 handler = cp0.boot_exception_vectors() ? 0xbfc00180 : 0x80000080;
-    dbg("WARNING: Exception raised", dbg::hex((u32)exception));
+    if (exception != Exception::Syscall)
+        dbg("WARNING: Exception raised", dbg::hex((u32)exception));
 
     // Shift bits [5:0] two places to the left
     const u32 mode = cp0.sr & 0x3f;

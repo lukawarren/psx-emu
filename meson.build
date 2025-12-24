@@ -39,6 +39,7 @@ src_files = files(
   'src/main.cpp',
   'src/cpu.cpp',
   'src/bus.cpp',
+  'src/gpu.cpp',
   'src/trace.cpp'
 )
 

@@ -1,4 +1,5 @@
 #pragma once
+#include "gpu.h"
 
 /*
         KUSEG     KSEG0     KSEG1
@@ -28,6 +29,7 @@ class Bus
 {
 public:
     Bus(const std::string& bios_path);
+    void clock();
 
     u8 read_u8(const u32 address);
     u16 read_u16(const u32 address);
@@ -44,6 +46,13 @@ public:
     u32 timer_0_target;
     u32 timer_1_target;
     u32 timer_2_target;
+    u32 dma_control = 0x07654321; // Initial value on reset
+    u32 dma_interrupt;
+    u32 dma_base_address_channel_2;
+    u32 dma_block_control_channel_2;
+    u32 dma_channel_control_channel_2;
+
+    GPU gpu;
 
 private:
     void read_from_file(u8* buffer, const std::string& filename);
@@ -54,4 +63,16 @@ private:
 
     u8 bios[4096 * 1024]; // 4 KB
     u8 ram[2 * 1024 * 1024]; // 2 MB
+
+    inline u8 get_dma_priority(const u8 channel) const
+    {
+        // Bits 0-2, 4-6, ..., 24-26 (for channel 6)
+        return (dma_control >> (channel * 4)) & 0b111;
+    }
+
+    inline bool get_dma_master_enable(const u8 channel) const
+    {
+        // Bits 3, 7, 11, 15, ..., 27 (for channel 6)
+        return ((dma_control >> (channel * 4 + 3)) & 0b1) != 0;
+    }
 };
