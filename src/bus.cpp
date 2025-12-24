@@ -14,10 +14,12 @@ void Bus::clock()
     // TODO: analyse priorities if multiple DMA channels are due
     //       (on a tie, take 0 as lowest and 6 as highest priority)
 
+    // TOOD: abstract
+
     if (get_dma_master_enable(2) && DMAChannelControl::transfer_due(dma_channel_control_channel_2))
     {
         // TODO: respect DREQ - right now just assume the target is ready
-        DMAChannelControl control(dma_channel_control_channel_2);
+        DMAChannelControl control(dma_channel_control_channel_2, 2);
 
         if (!control.transfer_direction_is_to_device ||
             control.transfer_mode != DMAChannelControl::TransferMode::LinkedList)
@@ -25,7 +27,7 @@ void Bus::clock()
             dbg(
                 "TODO: unsupported DMAChannelControl configuration",
                 control.transfer_direction_is_to_device,
-                (u8)control.transfer_mode
+                (u32)control.transfer_mode
             );
             exit(1);
         }
@@ -48,6 +50,50 @@ void Bus::clock()
 
             header_address = next_node_address;
         }
+
+        dma_channel_control_channel_2 = DMAChannelControl::with_transfer_finished(dma_base_address_channel_2);
+    }
+
+    // Channel 6 is just used by the DMA to generate a linked-list for use by channel 2
+    else if (get_dma_master_enable(6) && DMAChannelControl::transfer_due(dma_channel_control_channel_6))
+    {
+        // TODO: respect DREQ - right now just assume the target is ready
+        DMAChannelControl control(dma_channel_control_channel_6, 6);
+
+        if (control.transfer_direction_is_to_device ||
+            control.transfer_mode != DMAChannelControl::TransferMode::Burst)
+        {
+            dbg(
+                "TODO: unsupported DMAChannelControl configuration",
+                control.transfer_direction_is_to_device,
+                (u32)control.transfer_mode
+            );
+            exit(1);
+        }
+
+        if (control.burst_mode_enables_chopping)
+        {
+            dbg("TODO: burst mode wants to support chopping + update MADR");
+            exit(1);
+        }
+
+        u32 address = dma_base_address_channel_6;
+        u16 words = dma_block_control_channel_6 & 0xFFFF;
+
+        while (words > 0)
+        {
+            // Sanitise address (let RAM wrap around)
+            const u32 addr = address & 0x1FFFFC;
+
+            // Last entry table marker, else pointer to previous entry
+            if (words == 1) write_u32(addr, 0xFFFFFF);
+            else write_u32(addr, (address - 4) & 0x1FFFFF);
+
+            if (control.madr_increment_per_step) address += 4; else address -= 4;
+            words -= 1;
+        }
+
+        dma_channel_control_channel_6 = DMAChannelControl::with_transfer_finished(dma_base_address_channel_6);
     }
 }
 
@@ -246,9 +292,9 @@ u32 Bus::io_read_u32(const u32 address)
     if (address == 0x1F8010A0) { return dma_base_address_channel_2; }
     if (address == 0x1F8010A4) { return dma_block_control_channel_2; }
     if (address == 0x1F8010A8) { return dma_channel_control_channel_2; }
-    if (address == 0x1F8010E0) { dbg("TODO: channel 6 DMA write?"); return 0; }
-    if (address == 0x1F8010E4) { dbg("TODO: channel 6 DMA write?"); return 0; }
-    if (address == 0x1F8010E8) { dbg("TODO: channel 6 DMA write?"); return 0; }
+    if (address == 0x1F8010E0) { return dma_base_address_channel_6; }
+    if (address == 0x1F8010E4) { return dma_block_control_channel_6; }
+    if (address == 0x1F8010E8) { return dma_channel_control_channel_6; }
 
     dbg("TODO: unrecognised I/O read", dbg::hex(address));
     exit(1);
@@ -403,7 +449,7 @@ void Bus::io_write_u32(const u32 address, const u32 value)
     {
         dma_control = value;
         for (u8 i = 0; i <= 6; i++)
-            if (i != 2 && get_dma_master_enable(i))
+            if (i != 2 && i != 6 && get_dma_master_enable(i))
                 dbg("TODO: DMA enabled for unsupport channel", (u32)i);
         return;
     }
@@ -420,9 +466,9 @@ void Bus::io_write_u32(const u32 address, const u32 value)
     if (address == 0x1F8010A0) { dma_base_address_channel_2 = value; return; }
     if (address == 0x1F8010A4) { dma_block_control_channel_2 = value; return; }
     if (address == 0x1F8010A8) { dma_channel_control_channel_2 = value; return; }
-    if (address == 0x1F8010E0) { dbg("TODO: channel 6 DMA write?"); return; }
-    if (address == 0x1F8010E4) { dbg("TODO: channel 6 DMA write?"); return; }
-    if (address == 0x1F8010E8) { dbg("TODO: channel 6 DMA write?"); return; }
+    if (address == 0x1F8010E0) { dma_base_address_channel_6 = value; return; }
+    if (address == 0x1F8010E4) { dma_block_control_channel_6 = value; return; }
+    if (address == 0x1F8010E8) { dma_channel_control_channel_6 = value; return; }
 
     // GPU
     if (address == 0x1F801810) { gpu.send_gp0_command(value); return; }

@@ -41,8 +41,8 @@ private:
     u32 drawing_area_y2;
 
     // GP0 0xE5 settings
-    u16 drawing_offset_x;
-    u16 drawing_offset_y;
+    i16 drawing_offset_x;
+    i16 drawing_offset_y;
 
     // GP0 0xE6 settings
     bool set_mask_while_drawing;

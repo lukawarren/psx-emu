@@ -41,8 +41,13 @@ void CPU::execute()
     const u32 instruction = bus.read_u32(pc);
     previous_pc = pc;
 
-#if 0
+#if 1
+    static int i = 0;
+    if (i++ > 100000000)
     trace(instruction);
+    if (i++ > 100000000)
+    dbg(dbg::hex(bus.read_u32(0x800892bc)));
+    if (i > 100000000 + 10000) exit(1);
 #endif
 
     // Get next program counter

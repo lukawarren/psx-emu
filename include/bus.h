@@ -47,9 +47,13 @@ public:
     u32 timer_2_target;
     u32 dma_control = 0x07654321; // Initial value on reset
     u32 dma_interrupt;
+
     u32 dma_base_address_channel_2;
     u32 dma_block_control_channel_2;
     u32 dma_channel_control_channel_2;
+    u32 dma_base_address_channel_6;
+    u32 dma_block_control_channel_6;
+    u32 dma_channel_control_channel_6;
 
     GPU gpu;
 
@@ -94,22 +98,49 @@ private:
         bool force_start_without_dreq;
         bool mode_modifier;
 
-        DMAChannelControl(const u32 control)
+        DMAChannelControl(const u32 control, const u8 channel)
         {
-            transfer_direction_is_to_device = (control >> 0) & 0b1;
-            madr_increment_per_step = (control >> 1) & 0b1;
-            burst_mode_enables_chopping = (control >> 8) & 0b1;
-            transfer_mode = TransferMode((control >> 9) & 0b11);
-            chopping_dma_window_size = 1 << ((control >> 16) & 0b111);
-            chopping_cpu_window_size = 1 << ((control >> 20) & 0b111);
-            start_transfer = (control >> 24) & 0b1;
-            force_start_without_dreq = (control >> 28) & 0b1;
-            mode_modifier = (control >> 29) & 0b1;
+            if (channel == 6)
+            {
+                // Only bits 24, 28 and 30 are writable (ignore 30)
+                start_transfer = (control >> 24) & 0b1;
+                force_start_without_dreq = (control >> 28) & 0b1;
+
+                // All others are 0...
+                transfer_direction_is_to_device = 0;
+                burst_mode_enables_chopping = 0;
+                transfer_mode = TransferMode::Burst;
+                chopping_dma_window_size = 0;
+                chopping_cpu_window_size = 0;
+                mode_modifier = 0;
+
+                // Except bit 1, which is always 1 (i.e. always MADR increment)
+                madr_increment_per_step =1;
+            }
+            else
+            {
+                transfer_direction_is_to_device = (control >> 0) & 0b1;
+                madr_increment_per_step = (control >> 1) & 0b1;
+                burst_mode_enables_chopping = (control >> 8) & 0b1;
+                transfer_mode = TransferMode((control >> 9) & 0b11);
+                chopping_dma_window_size = 1 << ((control >> 16) & 0b111);
+                chopping_cpu_window_size = 1 << ((control >> 20) & 0b111);
+                start_transfer = (control >> 24) & 0b1;
+                force_start_without_dreq = (control >> 28) & 0b1;
+                mode_modifier = (control >> 29) & 0b1;
+            }
         }
 
         static inline bool transfer_due(const u32 control)
         {
             return (control & (1 << 24)) != 0;
         }
+
+        static inline bool with_transfer_finished(const u32 control)
+        {
+            // Clear "start transfer" and "force transfer start" bits
+            return control & ~((1U << 24) | (1U << 28));
+        }
+
     };
 };

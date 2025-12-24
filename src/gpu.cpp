@@ -98,8 +98,13 @@ void GPU::send_gp0_command(const u32 opcode)
     // Drawing offset
     if (command == 0xE5)
     {
-        drawing_offset_x = opcode & 0b11111111111;
-        drawing_offset_y = (opcode >> 11) & 0b11111111111;
+        const u32 x = opcode & 0b11111111111;
+        const u32 y = (opcode >> 11) & 0b11111111111;
+
+        // 11-bit signed two's complement
+        drawing_offset_x = (i16)(x << 5) >> 5;
+        drawing_offset_y = (i16)(y << 5) >> 5;
+
         return;
     }
 
@@ -199,7 +204,7 @@ void GPU::send_gp1_command(const u32 opcode)
     // Start of display area (in VRAM)
     if (command == 0x05)
     {
-        display_area_x = opcode & 0b1111111111;
+        display_area_x = opcode & 0b1111111110;
         display_area_y = (opcode >> 10) & 0b111111111;
         return;
     }
@@ -240,5 +245,4 @@ void GPU::send_gp1_command(const u32 opcode)
 void GPU::dma_send(const u32 data)
 {
     send_gp0_command(data);
-    printf("%u\n", data);
 }
