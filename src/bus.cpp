@@ -21,8 +21,10 @@ void Bus::clock()
         // TODO: respect DREQ - right now just assume the target is ready
         DMAChannelControl control(dma_channel_control_channel_2, 2);
 
-        if (!control.transfer_direction_is_to_device ||
-            control.transfer_mode != DMAChannelControl::TransferMode::LinkedList)
+        if (!control.transfer_direction_is_to_device || (
+            control.transfer_mode != DMAChannelControl::TransferMode::LinkedList &&
+            control.transfer_mode != DMAChannelControl::TransferMode::Slice
+        ))
         {
             dbg(
                 "TODO: unsupported DMAChannelControl configuration",
@@ -32,23 +34,48 @@ void Bus::clock()
             exit(1);
         }
 
-        u32 header_address = dma_base_address_channel_2 & 0b111111111111111111111111;
-
-        while (true)
+        if (control.transfer_mode == DMAChannelControl::TransferMode::Slice)
         {
-            // Linked list DMA - parse header
-            const u32 header = read_u32(header_address);
-            const u32 next_node_address = header & 0b111111111111111111111111;
-            const u32 extra_words = header >> 24;
-            const bool is_end_marker = next_node_address == 0xFFFFFF;
+            const u32 block_size = dma_block_control_channel_2 & 0xFFFF;
+            const u32 blocks = dma_block_control_channel_2 >> 16;
+            const u64 length = blocks * block_size;
 
-            for (u32 i = 0; i < extra_words; i++)
-                gpu.dma_send(read_u32(header_address + (i + 1) * 4));
+            // Sanitise address (let RAM wrap around)
+            const u32 address = dma_base_address_channel_2 & 0x1FFFFC;
 
-            if (is_end_marker)
-                break;
+            // Meant to pass N blocks, block by block, to device
+            // TODO: if block_size > length device can take, presumably drop
+            // TODO: respect DREQ
+            for (u64 i = 0; i < length; i++)
+                gpu.dma_send(read_u32((u32)(address + i)));
 
-            header_address = next_node_address;
+            // Set amount of blocks remaining to 0 in block control register
+            dma_block_control_channel_2 &= 0x0000FFFF;
+
+            // Set relevant MADR to the end marker
+            dma_base_address_channel_6 = 0xFFFFFF;
+        }
+        else
+        {
+            // Sanitise address (let RAM wrap around)
+            u32 header_address = dma_base_address_channel_2 & 0x1FFFFC;
+
+            while (true)
+            {
+                // Linked list DMA - parse header
+                const u32 header = read_u32(header_address);
+                const u32 next_node_address = header & 0b111111111111111111111111;
+                const u32 extra_words = header >> 24;
+                const bool is_end_marker = next_node_address == 0xFFFFFF;
+
+                for (u32 i = 0; i < extra_words; i++)
+                    gpu.dma_send(read_u32(header_address + (i + 1) * 4));
+
+                if (is_end_marker)
+                    break;
+
+                header_address = next_node_address;
+            }
         }
 
         dma_channel_control_channel_2 = DMAChannelControl::with_transfer_finished(dma_base_address_channel_2);
@@ -78,7 +105,8 @@ void Bus::clock()
         }
 
         u32 address = dma_base_address_channel_6;
-        u16 words = dma_block_control_channel_6 & 0xFFFF;
+        u32 words = dma_block_control_channel_6 & 0xFFFF;
+        if (words == 0) words = 0x10000;
 
         while (words > 0)
         {
@@ -94,6 +122,9 @@ void Bus::clock()
         }
 
         dma_channel_control_channel_6 = DMAChannelControl::with_transfer_finished(dma_base_address_channel_6);
+
+        // Set relevant MADR to the end marker
+        dma_base_address_channel_6 = 0xFFFFFF;
     }
 }
 

@@ -1,7 +1,10 @@
 #include "gpu.h"
 
+#define HACK
+
 GPU::GPU()
 {
+    dbg("TODO: undo bit 31 hack (and add back assertion)");
 }
 
 u32 GPU::get_gpu_read()
@@ -31,7 +34,9 @@ u32 GPU::get_gpu_stat()
 
     // GP1
     value |= u32(horizontal_resolution_1 & 0b11) << 17;
+#ifndef HACK
     value |= u32(vertical_resolution & 0b1) << 19;
+#endif
     value |= u32(video_mode & 0b1) << 20;
     value |= u32(display_area_colour_depth & 0b1) << 21;
     value |= u32(vertical_interlace & 0b1) << 22;
@@ -54,6 +59,35 @@ u32 GPU::get_gpu_stat()
 
 void GPU::send_gp0_command(const u32 opcode)
 {
+    // Continuation of 0xA0 - transfer from VRAM to CPU
+    if (gp0_input_state == GP0InputState::VRAMToCPU)
+    {
+        if (gp0_vram_to_cpu.header_count == 0)
+        {
+            gp0_vram_to_cpu.destination_x = (u16)opcode;
+            gp0_vram_to_cpu.destination_y = (u16)(opcode >> 16);
+        }
+        else if (gp0_vram_to_cpu.header_count == 1)
+        {
+            gp0_vram_to_cpu.width = (u16)opcode;
+            gp0_vram_to_cpu.height = (u16)(opcode >> 16);
+            dbg(gp0_vram_to_cpu.width, gp0_vram_to_cpu.height);
+
+            // Round up image size as must send full 32 bits; not just last 16-bit pixel
+            // Divide by 2 as two pixels per 32-bit packet
+            gp0_vram_to_cpu.remaining_words = ((gp0_vram_to_cpu.width * gp0_vram_to_cpu.height + 1U) & ~1U) / 2U;
+        }
+        else
+        {
+            if (--gp0_vram_to_cpu.remaining_words == 0)
+                gp0_input_state = GP0InputState::Normal;
+            return;
+        }
+
+        gp0_vram_to_cpu.header_count++;
+        return;
+    }
+
     const u32 command = ((opcode >> 24) & 0xFF);
 
     // Draw mode settings
@@ -116,9 +150,25 @@ void GPU::send_gp0_command(const u32 opcode)
         return;
     }
 
-    // NOP?
-    if (opcode == 0x0007920c)
+    // NOPs
+    if (command == 0x00)
         return;
+
+    // TODO: drawing
+    if (command == 0x28)
+        return;
+
+    // Clears the CLUT cache
+    if (command == 0x01)
+        return;
+
+    // CPU to VRAM blit
+    if (command == 0xA0)
+    {
+        gp0_input_state = GP0InputState::VRAMToCPU;
+        gp0_vram_to_cpu.header_count = 0;
+        return;
+    }
 
     dbg("TODO: unknown GP0 command", dbg::hex(opcode), dbg::hex(command));
     exit(1);
@@ -126,7 +176,6 @@ void GPU::send_gp0_command(const u32 opcode)
 
 void GPU::send_gp1_command(const u32 opcode)
 {
-    dbg(dbg::hex(opcode));
     const u8 command = (u8)(opcode >> 24);
 
     // Reset GPU
@@ -184,7 +233,9 @@ void GPU::send_gp1_command(const u32 opcode)
         horizontal_resolution_2 = 0;
         flip_screen_horizontally = 0;
 
+#ifndef HACK
         assert(get_gpu_stat() == 0x14802000);
+#endif
         return;
     }
 

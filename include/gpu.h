@@ -17,6 +17,27 @@ public:
     void dma_send(const u32 data);
 
 private:
+    enum class GP0InputState
+    {
+        Normal,
+        VRAMToCPU
+    } gp0_input_state = GP0InputState::Normal;
+
+    // GPO 0xA0 - VRAM to CPU
+    struct VRAMToCPU
+    {
+        u16 destination_x;
+        u16 destination_y;
+        u16 width;
+        u16 height;
+        u32 remaining_words;
+        u8 header_count;
+    } gp0_vram_to_cpu;
+
+    // Laid out as 512 lines of 2048 bytes each
+    // i.e 1024x512 16-bit pixels
+    u8 vram[1024 * 512 * 2];
+
     // GP0 0xE0 settings
     u8 texture_page_x_base;
     u8 texture_page_y_base_1;
