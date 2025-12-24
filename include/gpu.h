@@ -28,6 +28,26 @@ private:
     bool textured_rectangle_x_flip;
     bool textured_rectangle_y_flip;
 
+    // GP0 0xE2 settings - NOTE: in 8 pixel steps
+    u8 texture_window_mask_x;
+    u8 texture_window_mask_y;
+    u8 texture_window_offset_x;
+    u8 texture_window_offset_y;
+
+    // GP0 0xE3 and 0xE4
+    u32 drawing_area_x1;
+    u32 drawing_area_y1;
+    u32 drawing_area_x2;
+    u32 drawing_area_y2;
+
+    // GP0 0xE5 settings
+    u16 drawing_offset_x;
+    u16 drawing_offset_y;
+
+    // GP0 0xE6 settings
+    bool set_mask_while_drawing;
+    bool check_mask_before_draw;
+
     bool interlace;
 
     // GP1 0x00 settings

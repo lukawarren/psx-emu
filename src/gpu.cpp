@@ -22,6 +22,10 @@ u32 GPU::get_gpu_stat()
     value |= u32(dither_24_bit_to_15_bit & 0b1) << 9;
     value |= u32(texture_page_y_base_2 & 0b1) << 15;
 
+    // GP0 0xE6 settings
+    value |= u32(set_mask_while_drawing & 0b1) << 11;
+    value |= u32(check_mask_before_draw & 0b1) << 12;
+
     // Misc.
     value |= u32(interlace & 0b1) << 13;
 
@@ -50,8 +54,10 @@ u32 GPU::get_gpu_stat()
 
 void GPU::send_gp0_command(const u32 opcode)
 {
+    const u32 command = ((opcode >> 24) & 0xFF);
+
     // Draw mode settings
-    if ((opcode & 0xE1000000) != 0)
+    if (command == 0xE1)
     {
         texture_page_x_base = ((opcode >> 0) & 0b111);
         texture_page_y_base_1 = ((opcode >> 4) & 0b1);
@@ -62,6 +68,46 @@ void GPU::send_gp0_command(const u32 opcode)
         texture_page_y_base_2 = ((opcode >> 11) & 0b1);
         textured_rectangle_x_flip = ((opcode >> 12) & 0b1);
         textured_rectangle_y_flip = ((opcode >> 13) & 0b1);
+        return;
+    }
+
+    // Texture window settings
+    if (command == 0xE2)
+    {
+        texture_window_mask_x = command & 0b11111;
+        texture_window_mask_y = (command >> 5) & 0b11111;
+        texture_window_offset_x = (command >> 10) & 0b11111;
+        texture_window_offset_y = (command >> 15) & 0b11111;
+        return;
+    }
+
+    // Drawing area settings
+    if (command == 0xE3)
+    {
+        drawing_area_x1 = opcode & 0b111111111;
+        drawing_area_y1 = (opcode >> 10) & 0b111111111;
+        return;
+    }
+    if (command == 0xE4)
+    {
+        drawing_area_x2 = opcode & 0b111111111;
+        drawing_area_y2 = (opcode >> 10) & 0b111111111;
+        return;
+    }
+
+    // Drawing offset
+    if (command == 0xE5)
+    {
+        drawing_offset_x = opcode & 0b11111111111;
+        drawing_offset_y = (opcode >> 11) & 0b11111111111;
+        return;
+    }
+
+    // Mask bit setting
+    if (command == 0xE6)
+    {
+        set_mask_while_drawing = (command & 0b1) != 0;
+        check_mask_before_draw = ((command >> 1) & 0b1) != 0;
         return;
     }
 
@@ -80,7 +126,7 @@ void GPU::send_gp1_command(const u32 opcode)
     // Reset GPU
     if (command == 0)
     {
-        // Reset GPU_STAT
+        // Reset GP0 settings
         texture_page_x_base = 0;
         texture_page_y_base_1 = 0;
         texture_page_y_base_2 = 0;
@@ -90,6 +136,19 @@ void GPU::send_gp1_command(const u32 opcode)
         draw_to_display_area = 1;
         textured_rectangle_x_flip = 0;
         textured_rectangle_y_flip = 0;
+        texture_window_mask_x = 0;
+        texture_window_mask_y = 0;
+        texture_window_offset_x = 0;
+        texture_window_offset_y = 0;
+        drawing_area_x1 = 0;
+        drawing_area_y1 = 0;
+        drawing_area_x2 = 0;
+        drawing_area_y2 = 0;
+        drawing_offset_x = 0;
+        drawing_offset_y = 0;
+        set_mask_while_drawing = 0;
+        check_mask_before_draw = 0;
+
         interlace = 1;
 
         // Reset GP1
@@ -180,5 +239,6 @@ void GPU::send_gp1_command(const u32 opcode)
 
 void GPU::dma_send(const u32 data)
 {
+    send_gp0_command(data);
     printf("%u\n", data);
 }
