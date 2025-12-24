@@ -89,7 +89,7 @@ void Bus::clock()
             if (words == 1) write_u32(addr, 0xFFFFFF);
             else write_u32(addr, (address - 4) & 0x1FFFFF);
 
-            if (control.madr_increment_per_step) address += 4; else address -= 4;
+            if (control.madr_increment_per_step) address -= 4; else address += 4;
             words -= 1;
         }
 

@@ -41,7 +41,7 @@ void CPU::execute()
     const u32 instruction = bus.read_u32(pc);
     previous_pc = pc;
 
-#if 1
+#if 0
     static int i = 0;
     if (i++ > 100000000)
     trace(instruction);

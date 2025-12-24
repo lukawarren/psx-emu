@@ -115,7 +115,7 @@ private:
                 mode_modifier = 0;
 
                 // Except bit 1, which is always 1 (i.e. always MADR increment)
-                madr_increment_per_step =1;
+                madr_increment_per_step = 1;
             }
             else
             {

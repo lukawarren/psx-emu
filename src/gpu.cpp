@@ -120,12 +120,13 @@ void GPU::send_gp0_command(const u32 opcode)
     if (opcode == 0x0007920c)
         return;
 
-    dbg("TODO: unknown GP0 command", dbg::hex(opcode), dbg::bin((u8)(opcode >> 29)));
+    dbg("TODO: unknown GP0 command", dbg::hex(opcode), dbg::hex(command));
     exit(1);
 }
 
 void GPU::send_gp1_command(const u32 opcode)
 {
+    dbg(dbg::hex(opcode));
     const u8 command = (u8)(opcode >> 24);
 
     // Reset GPU
