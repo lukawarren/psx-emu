@@ -17,23 +17,38 @@ public:
     void dma_send(const u32 data);
 
 private:
-    enum class GP0InputState
+    enum class GP0Mode
     {
         Normal,
         VRAMToCPU,
         CPUToVRAM
-    } gp0_input_state = GP0InputState::Normal;
+    };
+    struct
+    {
+        u32 remaining_words;
+        u8 header_count;
 
-    // GPO 0xA0 - VRAM to CPU
-    struct VRAMToCPU
+        void set_mode(GP0Mode new_mode)
+        {
+            mode = new_mode;
+            header_count = 0;
+        }
+
+        GP0Mode get_mode() const { return mode; }
+        void reset() { mode = GP0Mode::Normal; }
+
+        private:
+            GP0Mode mode = GP0Mode::Normal;
+    } gp0_input_state;
+
+    // GPO 0xA0 - CPU to VRAM
+    struct CPUToVRAM
     {
         u16 destination_x;
         u16 destination_y;
         u16 width;
         u16 height;
-        u32 remaining_words;
-        u8 header_count;
-    } gp0_vram_to_cpu;
+    } gp0_cpu_to_vram;
 
     // Laid out as 512 lines of 2048 bytes each
     // i.e 1024x512 16-bit pixels

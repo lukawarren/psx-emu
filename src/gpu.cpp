@@ -59,42 +59,41 @@ u32 GPU::get_gpu_stat()
 
 void GPU::send_gp0_command(const u32 opcode)
 {
-    // Continuation of 0xA0 - transfer from VRAM to CPU
-    if (gp0_input_state == GP0InputState::VRAMToCPU)
+    // Continuation of 0xA0 - transfer from CPU to VRAM
+    if (gp0_input_state.get_mode() == GP0Mode::CPUToVRAM)
     {
-        if (gp0_vram_to_cpu.header_count == 0)
+        if (gp0_input_state.header_count == 0)
         {
-            gp0_vram_to_cpu.destination_x = (u16)opcode;
-            gp0_vram_to_cpu.destination_y = (u16)(opcode >> 16);
+            gp0_cpu_to_vram.destination_x = (u16)opcode;
+            gp0_cpu_to_vram.destination_y = (u16)(opcode >> 16);
         }
-        else if (gp0_vram_to_cpu.header_count == 1)
+        else if (gp0_input_state.header_count == 1)
         {
-            gp0_vram_to_cpu.width = (u16)opcode;
-            gp0_vram_to_cpu.height = (u16)(opcode >> 16);
-            dbg(gp0_vram_to_cpu.width, gp0_vram_to_cpu.height);
+            gp0_cpu_to_vram.width = (u16)opcode;
+            gp0_cpu_to_vram.height = (u16)(opcode >> 16);
 
             // Round up image size as must send full 32 bits; not just last 16-bit pixel
             // Divide by 2 as two pixels per 32-bit packet
-            gp0_vram_to_cpu.remaining_words = ((gp0_vram_to_cpu.width * gp0_vram_to_cpu.height + 1U) & ~1U) / 2U;
+            gp0_input_state.remaining_words = ((gp0_cpu_to_vram.width * gp0_cpu_to_vram.height + 1U) & ~1U) / 2U;
         }
         else
         {
-            if (--gp0_vram_to_cpu.remaining_words == 0)
-                gp0_input_state = GP0InputState::Normal;
+            if (--gp0_input_state.remaining_words == 0)
+                gp0_input_state.reset();
             return;
         }
 
-        gp0_vram_to_cpu.header_count++;
+        gp0_input_state.header_count++;
         return;
     }
 
     // Continuation of 0xC0 - transfer from CPU to VRAM
-    if (gp0_input_state == GP0InputState::CPUToVRAM)
+    if (gp0_input_state.get_mode() == GP0Mode::CPUToVRAM)
     {
-        if (gp0_vram_to_cpu.header_count == 1)
-            gp0_input_state = GP0InputState::Normal;
+        if (gp0_input_state.header_count == 1)
+            gp0_input_state.reset();
 
-        gp0_vram_to_cpu.header_count++;
+        gp0_input_state.header_count++;
         return;
     }
 
@@ -175,16 +174,14 @@ void GPU::send_gp0_command(const u32 opcode)
     // CPU to VRAM blit
     if (command == 0xA0)
     {
-        gp0_input_state = GP0InputState::VRAMToCPU;
-        gp0_vram_to_cpu.header_count = 0;
+        gp0_input_state.set_mode(GP0Mode::CPUToVRAM);
         return;
     }
 
     // VRAM to CPU blit
     if (command == 0xC0)
     {
-        gp0_input_state = GP0InputState::CPUToVRAM;
-        gp0_vram_to_cpu.header_count = 0;
+        gp0_input_state.set_mode(GP0Mode::VRAMToCPU);
         dbg("TODO: VRAM to CPU blit");
         return;
     }
@@ -226,7 +223,6 @@ void GPU::send_gp1_command(const u32 opcode)
         interlace = 1;
 
         // Reset GP1
-        dbg("TODO: GPU reset; clear FIFO (0x01) and check display_x*, display_y* values");
         irq_request = 0;
         display_off = 1;
         dma_direction = 0;
@@ -252,6 +248,9 @@ void GPU::send_gp1_command(const u32 opcode)
         horizontal_resolution_2 = 0;
         flip_screen_horizontally = 0;
 
+        // Reset command buffer
+        gp0_input_state.reset();
+
 #ifndef HACK
         assert(get_gpu_stat() == 0x14802000);
 #endif
@@ -261,7 +260,7 @@ void GPU::send_gp1_command(const u32 opcode)
     // Reset command buffer
     if (command == 0x01)
     {
-        dbg("TODO: reset GP1 command buffer");
+        gp0_input_state.reset();
         return;
     }
 

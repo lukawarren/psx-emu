@@ -10,6 +10,8 @@
 #include <string>
 #include <cstring>
 #include <cassert>
+#include <deque>
+#include <queue>
 
 using u8  = std::uint8_t;
 using u16 = std::uint16_t;
