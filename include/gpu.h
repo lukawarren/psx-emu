@@ -1,7 +1,9 @@
 #pragma once
+#include "renderer.h"
 
 class GPU
 {
+friend class Renderer;
 public:
     GPU();
 
@@ -21,7 +23,8 @@ private:
     {
         Normal,
         VRAMToCPU,
-        CPUToVRAM
+        CPUToVRAM,
+        RenderPolygon
     };
     struct
     {
@@ -50,9 +53,20 @@ private:
         u16 height;
     } gp0_cpu_to_vram;
 
-    // Laid out as 512 lines of 2048 bytes each
-    // i.e 1024x512 16-bit pixels
-    u8 vram[1024 * 512 * 2];
+    // GP0 upper bits == 0b001
+    struct RenderPolygon
+    {
+        bool gouraud_shading;
+        bool is_quad;
+        bool is_textured;
+        bool is_transparent;
+        bool use_raw_texture;
+        u32 colours[4];
+        u32 vertices[4];
+        u32 uvs[4];
+        u8 current_vertex;
+        u8 opcodes_sent;
+    } gp0_render_polygon;
 
     // GP0 0xE0 settings
     u8 texture_page_x_base;
@@ -110,4 +124,8 @@ private:
     bool vertical_interlace;
     bool horizontal_resolution_2;
     bool flip_screen_horizontally;
+
+    Renderer renderer;
+    void push_triangle();
+    void push_quad();
 };

@@ -154,6 +154,10 @@ u8 Bus::read_u8(const u32 address)
     if (WITHIN(0xBFC00000, 4096 * 1024))
         return bios[address - 0xBFC00000];
 
+    // CD-ROM
+    if (WITHIN(0x1F801800, 4))
+        return 0;
+
     dbg("TODO: unknown bus read", dbg::hex(address));
     exit(1);
 }
@@ -199,6 +203,10 @@ void Bus::write_u8(const u32 address, const u8 value)
 
     // BIOS ROM
     if (WITHIN(0x1FC00000, 4096 * 1024) || WITHIN(0x9FC00000, 4096 * 1024) || WITHIN(0xBFC00000, 4096 * 1024))
+        return;
+
+    // CD-ROM
+    if (WITHIN(0x1F801800, 4))
         return;
 
     dbg("TODO: unknown bus write", dbg::hex(address), dbg::hex(value));
@@ -350,10 +358,7 @@ void Bus::io_write_u16(const u32 address, const u16 value)
     {
         i_stat = value;
         if (value != 0)
-        {
             dbg("TODO: unsupported i_stat value", dbg::hex(value));
-            exit(1);
-        }
         return;
     }
 
@@ -426,10 +431,7 @@ void Bus::io_write_u32(const u32 address, const u32 value)
     {
         i_stat = value;
         if (value != 0)
-        {
             dbg("TODO: unsupported i_stat value", dbg::hex(value));
-            exit(1);
-        }
         return;
     }
 

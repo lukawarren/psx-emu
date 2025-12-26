@@ -19,12 +19,12 @@ if cc.get_id() == 'msvc'
 else
   cpp_args += [
     '-Wpedantic',
-    '-Wshadow',
     '-Wconversion',
     '-Wsign-conversion',
     '-Wundef',
     '-Wdouble-promotion',
     '-Wformat=2',
+    '-march=native'
   ]
 endif
 
@@ -40,7 +40,8 @@ src_files = files(
   'src/cpu.cpp',
   'src/bus.cpp',
   'src/gpu.cpp',
-  'src/trace.cpp'
+  'src/trace.cpp',
+  'src/renderer.cpp',
 )
 
 # Executable

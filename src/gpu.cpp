@@ -97,7 +97,58 @@ void GPU::send_gp0_command(const u32 opcode)
         return;
     }
 
+    if (gp0_input_state.get_mode() == GP0Mode::RenderPolygon)
+    {
+        // Pretend first colour was already sent to simplify logic
+        if (gp0_render_polygon.opcodes_sent == 0 && gp0_render_polygon.gouraud_shading)
+            gp0_render_polygon.opcodes_sent = 1;
+
+        if (gp0_render_polygon.gouraud_shading && gp0_render_polygon.is_textured)
+        {
+            if ((gp0_render_polygon.opcodes_sent % 3) == 0)
+                gp0_render_polygon.colours[gp0_render_polygon.current_vertex] = opcode;
+            else if ((gp0_render_polygon.opcodes_sent % 3) == 1)
+                gp0_render_polygon.vertices[gp0_render_polygon.current_vertex] = opcode;
+            else
+                gp0_render_polygon.uvs[gp0_render_polygon.current_vertex++] = opcode;
+        }
+        else if (gp0_render_polygon.gouraud_shading)
+        {
+            if ((gp0_render_polygon.opcodes_sent % 2) == 0)
+                gp0_render_polygon.colours[gp0_render_polygon.current_vertex] = opcode;
+            else if ((gp0_render_polygon.opcodes_sent % 2) == 1)
+                gp0_render_polygon.vertices[gp0_render_polygon.current_vertex++] = opcode;
+        }
+        else if (gp0_render_polygon.is_textured)
+        {
+            if ((gp0_render_polygon.opcodes_sent % 2) == 0)
+                gp0_render_polygon.vertices[gp0_render_polygon.current_vertex] = opcode;
+            else if ((gp0_render_polygon.opcodes_sent % 2) == 1)
+                gp0_render_polygon.uvs[gp0_render_polygon.current_vertex++] = opcode;
+        }
+        else
+            gp0_render_polygon.vertices[gp0_render_polygon.current_vertex++] = opcode;
+
+        gp0_render_polygon.opcodes_sent++;
+
+        if (--gp0_input_state.remaining_words == 0)
+        {
+            // If we are using flat shading, lie about colours (fill in rest)
+            if (!gp0_render_polygon.gouraud_shading)
+                for (int i = 1; i < 4; i++)
+                    gp0_render_polygon.colours[i] = gp0_render_polygon.colours[0];
+
+            // Full polygon received
+            if (gp0_render_polygon.is_quad) push_quad();
+            else push_triangle();
+            gp0_input_state.reset();
+        }
+
+        return;
+    }
+
     const u32 command = ((opcode >> 24) & 0xFF);
+    const u32 mode = opcode >> 29;
 
     // Draw mode settings
     if (command == 0xE1)
@@ -127,13 +178,13 @@ void GPU::send_gp0_command(const u32 opcode)
     // Drawing area settings
     if (command == 0xE3)
     {
-        drawing_area_x1 = opcode & 0b111111111;
+        drawing_area_x1 = opcode & 0b1111111111;
         drawing_area_y1 = (opcode >> 10) & 0b111111111;
         return;
     }
     if (command == 0xE4)
     {
-        drawing_area_x2 = opcode & 0b111111111;
+        drawing_area_x2 = opcode & 0b1111111111;
         drawing_area_y2 = (opcode >> 10) & 0b111111111;
         return;
     }
@@ -163,10 +214,6 @@ void GPU::send_gp0_command(const u32 opcode)
     if (command == 0x00)
         return;
 
-    // TODO: drawing
-    if (command == 0x28)
-        return;
-
     // Clears the CLUT cache
     if (command == 0x01)
         return;
@@ -186,7 +233,35 @@ void GPU::send_gp0_command(const u32 opcode)
         return;
     }
 
-    dbg("TODO: unknown GP0 command", dbg::hex(opcode), dbg::hex(command));
+    // Polygon render
+    if (mode == 0b001)
+    {
+        gp0_input_state.set_mode(GP0Mode::RenderPolygon);
+        gp0_render_polygon = {
+            .gouraud_shading = ((opcode >> 28) & 0b1) == 1,
+            .is_quad = ((opcode >> 27) & 0b1) == 1,
+            .is_textured = ((opcode >> 26) & 0b1) == 1,
+            .is_transparent = ((opcode >> 25) & 0b1) == 1,
+            .use_raw_texture = ((opcode >> 24) & 0b1) == 1,
+            .colours = {},
+            .vertices = {},
+            .uvs = {},
+            .current_vertex = 0,
+            .opcodes_sent = 0
+        };
+        gp0_render_polygon.colours[0] = opcode & 0xFFFFFF;
+
+        // First colour is already included, so subtract 1
+        const u32 vertices = gp0_render_polygon.is_quad ? 4 : 3;
+        gp0_input_state.remaining_words = vertices +
+            (gp0_render_polygon.gouraud_shading ? (vertices - 1) : 0) +
+            (gp0_render_polygon.is_textured ? vertices : 0);
+
+        return;
+    }
+
+
+    dbg("TODO: unknown GP0 command", dbg::hex(opcode), dbg::hex(command), dbg::bin((u8)mode));
     exit(1);
 }
 
@@ -315,6 +390,7 @@ void GPU::send_gp1_command(const u32 opcode)
         return;
     }
 
+    renderer.render();
     dbg("TODO: GP1 command", dbg::hex(command));
     exit(1);
 }
@@ -322,4 +398,46 @@ void GPU::send_gp1_command(const u32 opcode)
 void GPU::dma_send(const u32 data)
 {
     send_gp0_command(data);
+}
+
+void GPU::push_quad()
+{
+    // First triangle
+    renderer.push(*this, {
+        gp0_render_polygon.gouraud_shading,
+        gp0_render_polygon.is_textured,
+        gp0_render_polygon.is_transparent,
+        gp0_render_polygon.use_raw_texture,
+        gp0_render_polygon.colours,
+        gp0_render_polygon.vertices,
+        gp0_render_polygon.uvs
+    });
+
+    // Second triangle
+    renderer.push(*this, {
+        gp0_render_polygon.gouraud_shading,
+        gp0_render_polygon.is_textured,
+        gp0_render_polygon.is_transparent,
+        gp0_render_polygon.use_raw_texture,
+        gp0_render_polygon.colours + 1,
+        gp0_render_polygon.vertices + 1,
+        gp0_render_polygon.uvs + 1
+    });
+
+    renderer.render();
+}
+
+void GPU::push_triangle()
+{
+    renderer.push(*this, {
+        gp0_render_polygon.gouraud_shading,
+        gp0_render_polygon.is_textured,
+        gp0_render_polygon.is_transparent,
+        gp0_render_polygon.use_raw_texture,
+        gp0_render_polygon.colours,
+        gp0_render_polygon.vertices,
+        gp0_render_polygon.uvs
+    });
+
+    renderer.render();
 }
