@@ -32,8 +32,18 @@ public:
         }
     };
 
+    struct Rectangle
+    {
+        u32 colour;
+        u16 x;
+        u16 y;
+        u16 width;
+        u16 height;
+    };
+
     void blit(const u32 x, const u32 y, const u16 pixel);
     void push(const GPU& gpu, const Triangle& polygon);
+    void push(const Rectangle& rectangle);
 
     inline const u16* get_vram() const { return vram; }
 

@@ -59,7 +59,7 @@ void CPU::execute()
     if (pc == 0x80030000 && !did_sideload)
     {
         did_sideload = true;
-        bus.sideload_exe("../tests/gpu/quad/quad.exe");
+        bus.sideload_exe("../tests/gpu/triangle/triangle.exe");
     }
 #endif
 

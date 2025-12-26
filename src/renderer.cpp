@@ -110,6 +110,27 @@ void Renderer::push(const GPU& gpu, const Triangle& polygon)
     }
 }
 
+void Renderer::push(const Rectangle& rectangle)
+{
+    // Drop 24-bit colour to 16-bit, and set the mask bit to 0
+    u8 r, g, b;
+    unpack_colour(rectangle.colour, r, g, b);
+    const u16 colour = pack_colour(r, g, b, false);
+
+    // Clip to within VRAM
+    if (rectangle.x >= vram_width) return;
+    if (rectangle.y >= vram_height) return;
+    u16 width = rectangle.width;
+    u16 height = rectangle.height;
+    if (rectangle.x + width >= vram_width) width = vram_width - rectangle.x;
+    if (rectangle.y + height >= vram_height) height = vram_height - rectangle.y;
+
+    // Unaffected by mask setting
+    for (u16 y = 0; y < height; ++y)
+        for (u16 x = 0; x < width; ++x)
+            vram[(y + rectangle.y) * vram_width + x + rectangle.x] = colour;
+}
+
 i32 Renderer::get_cross_product_z(const Vertex& v0, const Vertex& v1, const Vertex& v2) const
 {
     return (v1.x - v0.x) * (v2.y - v0.y) - (v1.y - v0.y) * (v2.x - v0.x);

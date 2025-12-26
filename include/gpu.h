@@ -26,7 +26,8 @@ private:
         Normal,
         VRAMToCPU,
         CPUToVRAM,
-        RenderPolygon
+        RenderPolygon,
+        QuickRectangleFill
     };
     struct
     {
@@ -46,7 +47,6 @@ private:
             GP0Mode mode = GP0Mode::Normal;
     } gp0_input_state;
 
-    // GPO 0xA0 - CPU to VRAM
     struct CPUToVRAM
     {
         u16 destination_x;
@@ -56,7 +56,6 @@ private:
         u16 width;
     } gp0_cpu_to_vram;
 
-    // GP0 upper bits == 0b001
     struct RenderPolygon
     {
         bool gouraud_shading;
@@ -70,6 +69,15 @@ private:
         u8 current_vertex;
         u8 opcodes_sent;
     } gp0_render_polygon;
+
+    struct QuickRectangleFill
+    {
+        u32 colour;
+        u16 x;
+        u16 y;
+        u16 width;
+        u16 height;
+    } gp0_quick_rectangle_fill;
 
     // GP0 0xE0 settings
     u8 texture_page_x_base;

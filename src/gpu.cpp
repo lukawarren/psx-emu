@@ -117,6 +117,7 @@ void GPU::send_gp0_command(const u32 opcode)
         return;
     }
 
+    // Continuation of polygon rendering
     if (gp0_input_state.get_mode() == GP0Mode::RenderPolygon)
     {
         // Pretend first colour was already sent to simplify logic
@@ -164,6 +165,34 @@ void GPU::send_gp0_command(const u32 opcode)
             gp0_input_state.reset();
         }
 
+        return;
+    }
+
+    // Continuation of quick rectangle fill
+    if (gp0_input_state.get_mode() == GP0Mode::QuickRectangleFill)
+    {
+        if (gp0_input_state.header_count == 0)
+        {
+            gp0_quick_rectangle_fill.x = (u16)opcode;
+            gp0_quick_rectangle_fill.y = (u16)(opcode >> 16);
+        }
+        else if (gp0_input_state.header_count == 1)
+        {
+            gp0_quick_rectangle_fill.width = (u16)opcode;
+            gp0_quick_rectangle_fill.height = (u16)(opcode >> 16);
+        }
+
+        if (++gp0_input_state.header_count == 2)
+        {
+            gp0_input_state.reset();
+            renderer.push({
+                gp0_quick_rectangle_fill.colour,
+                gp0_quick_rectangle_fill.x,
+                gp0_quick_rectangle_fill.y,
+                gp0_quick_rectangle_fill.width,
+                gp0_quick_rectangle_fill.height
+            });
+        }
         return;
     }
 
@@ -280,6 +309,13 @@ void GPU::send_gp0_command(const u32 opcode)
         return;
     }
 
+    // Quick rectangle fill
+    if (command == 0x02)
+    {
+        gp0_input_state.set_mode(GP0Mode::QuickRectangleFill);
+        gp0_quick_rectangle_fill.colour = opcode & 0xFFFFFF;
+        return;
+    }
 
     dbg("TODO: unknown GP0 command", dbg::hex(opcode), dbg::hex(command), dbg::bin((u8)mode));
     exit(1);
