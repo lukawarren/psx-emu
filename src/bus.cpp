@@ -299,9 +299,9 @@ u32 Bus::io_read_u32(const u32 address)
         return i_mask;
 
     // Timer values
-    if (address == 0x1F801100) { dbg("TODO: accurate timer values"); return timer_0; }
-    if (address == 0x1F801110) { dbg("TODO: accurate timer values"); return timer_1; }
-    if (address == 0x1F801120) { dbg("TODO: accurate timer values"); return timer_2; }
+    if (address == 0x1F801100) return timer_0;
+    if (address == 0x1F801110) return timer_1;
+    if (address == 0x1F801120) return timer_2;
 
     // SPU voice registers
     if (address >= 0x1F801C00 && address <= 0x1F801D7E)
@@ -481,9 +481,6 @@ void Bus::io_write_u32(const u32 address, const u32 value)
     if (address == 0x1F8010F0)
     {
         dma_control = value;
-        for (u8 i = 0; i <= 6; i++)
-            if (i != 2 && i != 6 && get_dma_master_enable(i))
-                dbg("TODO: DMA enabled for unsupport channel", (u32)i);
         return;
     }
 

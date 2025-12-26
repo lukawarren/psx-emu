@@ -16,6 +16,9 @@
 #include <array>
 #include <cmath>
 
+#include <SDL3/SDL.h>
+#include <SDL3/SDL_main.h>
+
 using u8  = std::uint8_t;
 using u16 = std::uint16_t;
 using u32 = std::uint32_t;

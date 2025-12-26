@@ -7,6 +7,10 @@ class CPU
 public:
     CPU();
     void execute();
+    Bus bus;
+
+    // Frequency in Hz
+    constexpr static u32 frequency = 33868800;
 
 private:
     /*
@@ -30,7 +34,6 @@ private:
     u32 pc;
     u32 hi;
     u32 lo;
-    Bus bus;
     CP0 cp0;
 
     /*

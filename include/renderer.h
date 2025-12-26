@@ -34,8 +34,11 @@ public:
 
     void blit(const u32 x, const u32 y, const u16 pixel);
     void push(const GPU& gpu, const Triangle& polygon);
-    void render();
 
+    inline const u16* get_vram() const { return vram; }
+
+    constexpr static i32 vram_width = 1024;
+    constexpr static i32 vram_height = 512;
 private:
     struct Vertex
     {
@@ -82,7 +85,5 @@ private:
 
     // Laid out as 512 lines of 2048 bytes each
     // i.e 1024x512 16-bit pixels
-    constexpr static i32 vram_width = 1024;
-    constexpr static i32 vram_height = 512;
-    u16 vram[1024 * 512];
+    u16 vram[vram_width * vram_height];
 };

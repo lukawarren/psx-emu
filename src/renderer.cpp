@@ -70,51 +70,6 @@ void Renderer::push(const GPU& gpu, const Triangle& polygon)
             }
         }
     }
-
-    render();
-}
-
-#include <fstream>
-#include <iomanip>
-#include <sstream>
-void Renderer::render()
-{
-    // TODO: respect display range and display area, and if the display is even on?
-    //       actually loads - see gpu.h "GP1 0x08 settings"
-
-    // Open a file for this frame
-    static int frame_count = 0;
-    if (frame_count == 1000) exit(1);
-    std::ostringstream filename;
-    filename << "/tmp/psx_frame_" << std::setw(4) << std::setfill('0') << frame_count++ << ".ppm";
-    std::ofstream out(filename.str(), std::ios::binary);
-    if (!out) { dbg("failed to create ofstream"); exit(1); }
-
-    // PPM header
-    // P6 = binary RGB
-    int width  = vram_width;   // 1024
-    int height = vram_height;  // 512
-    out << "P6\n" << width << " " << height << "\n255\n";
-
-    // Write VRAM pixels
-    for (i32 y = 0; y < height; y++)
-    {
-        for (i32 x = 0; x < width; x++)
-        {
-            u16 pixel = vram[y * width + x];
-
-            // Convert 5-bit BGR555 to 8-bit RGB
-            char r = char((pixel & 0x1F) << 3);
-            char g = char(((pixel >> 5) & 0x1F) << 3);
-            char b = char(((pixel >> 10) & 0x1F) << 3);
-
-            out.put(r);
-            out.put(g);
-            out.put(b);
-        }
-    }
-
-    out.close();
 }
 
 i32 Renderer::get_cross_product_z(const Vertex& v0, const Vertex& v1, const Vertex& v2) const

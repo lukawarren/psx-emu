@@ -4,7 +4,7 @@ project(
   version : '0.1.0',
   default_options : [
     'cpp_std=c++20',
-    'buildtype=release',
+    'buildtype=debugoptimized',
     'warning_level=3',
     'b_lto=true'
   ]
@@ -33,6 +33,9 @@ endif
 
 add_project_arguments(cpp_args, language : 'cpp')
 
+# Dependencies
+sdl3_dep = dependency('sdl3', required: true)
+
 # Headers
 inc = include_directories('include', 'external/dbg-macro')
 pch = 'include/common.h'
@@ -53,5 +56,6 @@ executable(
   src_files,
   include_directories: inc,
   cpp_pch: pch,
-  install: false
+  install: false,
+  dependencies: [sdl3_dep]
 )

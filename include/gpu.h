@@ -18,6 +18,8 @@ public:
     // DMA
     void dma_send(const u32 data);
 
+    Renderer renderer;
+
 private:
     enum class GP0Mode
     {
@@ -126,7 +128,6 @@ private:
     bool horizontal_resolution_2;
     bool flip_screen_horizontally;
 
-    Renderer renderer;
     void push_triangle();
     void push_quad();
 };

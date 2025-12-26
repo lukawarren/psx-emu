@@ -410,7 +410,13 @@ void GPU::send_gp1_command(const u32 opcode)
         return;
     }
 
-    renderer.render();
+    // Acknowledge GPU interrupt
+    if (command == 0x02)
+    {
+        irq_request = 0;
+        return;
+    }
+
     dbg("TODO: GP1 command", dbg::hex(command));
     exit(1);
 }
@@ -443,8 +449,6 @@ void GPU::push_quad()
         gp0_render_polygon.vertices + 1,
         gp0_render_polygon.uvs + 1
     });
-
-    renderer.render();
 }
 
 void GPU::push_triangle()
@@ -458,6 +462,4 @@ void GPU::push_triangle()
         gp0_render_polygon.vertices,
         gp0_render_polygon.uvs
     });
-
-    renderer.render();
 }
