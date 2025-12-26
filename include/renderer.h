@@ -81,7 +81,6 @@ private:
     i32 get_cross_product_z(const Vertex& v0, const Vertex& v1, const Vertex& v2) const;
     void ensure_clockwise_vertex_ordering(Vertex& v0, Vertex& v1, Vertex& v2) const;
     bool is_inside_triangle(const i32 x, const i32 y, const Vertex& v0, const Vertex& v1, const Vertex& v2) const;
-    std::array<double, 3> get_barycentric_coordinates(const i32 x, const i32 y, Vertex v0, Vertex v1, Vertex v2) const;
 
     // Laid out as 512 lines of 2048 bytes each
     // i.e 1024x512 16-bit pixels

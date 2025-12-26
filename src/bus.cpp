@@ -1,6 +1,6 @@
 #include "bus.h"
 
-#define WITHIN(base, size) (address >= base && address < base + size)
+#define WITHIN(base, size) (physical_address >= base && physical_address < base + size)
 
 Bus::Bus(const std::string& bios_path)
 {
@@ -130,79 +130,75 @@ void Bus::clock()
 
 u8 Bus::read_u8(const u32 address)
 {
-    // Main RAM
-    if (address < 2048 * 1024)
-        return ram[address];
-    if (WITHIN(0x80000000, 2048 * 1024))
-        return ram[address - 0x80000000];
-    if (WITHIN(0xA0000000, 2048 * 1024))
-        return ram[address - 0xA0000000];
+    const u32 physical_address = get_physical_address(address);
+    if (u8* ptr = get_bank_address(physical_address))
+        return *ptr;
 
     // Expansion 1
-    if (WITHIN(0x1F000000, 8192 * 1024) || WITHIN(0x9F000000, 8192 * 1024) || WITHIN(0xBF000000, 8192 * 1024))
+    if (WITHIN(0x1F000000, 8192 * 1024))
         return 0xff;
 
     // Expansion 2
-    if (WITHIN(0x1F802000, 8 * 1024) || WITHIN(0x9F802000, 8 * 1024) || WITHIN(0xBF802000, 8 * 1024))
+    if (WITHIN(0x1F802000, 8 * 1024))
         return 0xff;
-
-    // BIOS ROM
-    if (WITHIN(0x1FC00000, 4096 * 1024))
-        return bios[address - 0x1FC00000];
-    if (WITHIN(0x9FC00000, 4096 * 1024))
-        return bios[address - 0x9FC00000];
-    if (WITHIN(0xBFC00000, 4096 * 1024))
-        return bios[address - 0xBFC00000];
 
     // CD-ROM
     if (WITHIN(0x1F801800, 4))
         return 0;
 
-    dbg("TODO: unknown bus read", dbg::hex(address));
+    dbg("TODO: unknown bus read", dbg::hex(address), dbg::hex(physical_address));
     exit(1);
 }
 
 u16 Bus::read_u16(const u32 address)
 {
+    const u32 physical_address = get_physical_address(address);
+    if (u8* ptr = get_bank_address(physical_address))
+        return (u32)ptr[0] | ((u32)ptr[1] << 8);
+
     // I/O
     if (WITHIN(0x1F801000, 4096) || address == 0xFFFE0130)
         return io_read_u16(address);
 
-    return (u32)read_u8(address) | ((u32)read_u8(address + 1) << 8);
+    dbg("TODO: unknown bus read", dbg::hex(address), dbg::hex(physical_address));
+    exit(1);
 }
 
 u32 Bus::read_u32(const u32 address)
 {
+    const u32 physical_address = get_physical_address(address);
+    if (u8* ptr = get_bank_address(physical_address))
+        return (u32)ptr[0] | ((u32)ptr[1] << 8) | ((u32)ptr[2] << 16) | ((u32)ptr[3] << 24);
+
     // I/O
     if (WITHIN(0x1F801000, 4096) || address == 0xFFFE0130)
         return io_read_u32(address);
 
-    return (u32)read_u8(address) |
-           ((u32)read_u8(address + 1) << 8) |
-           ((u32)read_u8(address + 2) << 16) |
-           ((u32)read_u8(address + 3) << 24);
+    dbg("TODO: unknown bus read", dbg::hex(address), dbg::hex(physical_address));
+    exit(1);
 }
 
 void Bus::write_u8(const u32 address, const u8 value)
 {
+    const u32 physical_address = get_physical_address(address);
+
     // Main RAM
-    if (address < 2048 * 1024)
-        { ram[address] = value; return; }
-    if (WITHIN(0x80000000, 2048 * 1024))
-        { ram[address - 0x80000000] = value; return; }
-    if (WITHIN(0xA0000000, 2048 * 1024))
-        { ram[address - 0xA0000000] = value; return; }
+    if (physical_address < 2048 * 1024)
+    {
+        ram[physical_address] = value;
+        return;
+    }
 
     // Expansion 1
-    if (WITHIN(0x1F000000, 8192 * 1024) || WITHIN(0x9F000000, 8192 * 1024) || WITHIN(0xBF000000, 8192 * 1024))
+    if (WITHIN(0x1F000000, 8192 * 1024))
         return;
 
     // Expansion 2
-    if (WITHIN(0x1F802000, 8 * 1024) || WITHIN(0x9F802000, 8 * 1024) || WITHIN(0xBF802000, 8 * 1024))
+    if (WITHIN(0x1F802000, 8 * 1024))
         return;
 
     // BIOS ROM
-    if (WITHIN(0x1FC00000, 4096 * 1024) || WITHIN(0x9FC00000, 4096 * 1024) || WITHIN(0xBFC00000, 4096 * 1024))
+    if (WITHIN(0x1FC00000, 4096 * 1024))
         return;
 
     // CD-ROM
@@ -215,6 +211,8 @@ void Bus::write_u8(const u32 address, const u8 value)
 
 void Bus::write_u16(const u32 address, const u16 value)
 {
+    const u32 physical_address = get_physical_address(address);
+
     // I/O
     if (WITHIN(0x1F801000, 4096))
     {
@@ -222,23 +220,25 @@ void Bus::write_u16(const u32 address, const u16 value)
         return;
     }
 
-    write_u8(address + 0, (u8)(value >> 0));
-    write_u8(address + 1, (u8)(value >> 8));
+    write_u8(physical_address + 0, (u8)(value >> 0));
+    write_u8(physical_address + 1, (u8)(value >> 8));
 }
 
 void Bus::write_u32(const u32 address, const u32 value)
 {
+    const u32 physical_address = get_physical_address(address);
+
     // I/O
-    if (WITHIN(0x1F801000, 4096) || address == 0xFFFE0130)
+    if (WITHIN(0x1F801000, 4096) || physical_address == 0xFFFE0130)
     {
         io_write_u32(address, value);
         return;
     }
 
-    write_u8(address + 0, (u8)(value >> 0));
-    write_u8(address + 1, (u8)(value >> 8));
-    write_u8(address + 2, (u8)(value >> 16));
-    write_u8(address + 3, (u8)(value >> 24));
+    write_u8(physical_address + 0, (u8)(value >> 0));
+    write_u8(physical_address + 1, (u8)(value >> 8));
+    write_u8(physical_address + 2, (u8)(value >> 16));
+    write_u8(physical_address + 3, (u8)(value >> 24));
 }
 
 void Bus::read_from_file(u8* buffer, const std::string& filename)
@@ -506,4 +506,33 @@ void Bus::io_write_u32(const u32 address, const u32 value)
 
     dbg("TODO: unrecognised I/O write", dbg::hex(address), dbg::hex(value));
     exit(1);
+}
+
+u32 Bus::get_physical_address(const u32 address) const
+{
+    const static u32 region_mask[8] {
+        // KUSEG: 2048MB
+        0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF , 0xFFFFFFFF,
+        // KSEG0: 512MB
+        0x7FFFFFFF ,
+        // KSEG1: 512MB
+        0x1FFFFFFF ,
+        // KSEG2: 1024MB
+        0xFFFFFFFF, 0xFFFFFFFF
+    };
+
+    return address & region_mask[address >> 29];
+}
+
+u8* Bus::get_bank_address(const u32 physical_address)
+{
+    // Main RAM
+    if (physical_address < 2 * 1024 * 1024)
+        return &ram[physical_address];
+
+    // BIOS ROM
+    if (physical_address >= 0x1FC00000 && physical_address < 0x1FC00000 + 512 * 1024)
+        return &bios[physical_address & 0x3FFFFF];
+
+    return nullptr;
 }

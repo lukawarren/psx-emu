@@ -16,7 +16,10 @@ cc = meson.get_compiler('cpp')
 cpp_args = []
 
 if cc.get_id() == 'msvc'
-  cpp_args += [ '/W4' ]
+  cpp_args += [
+    '/W4',
+    '/GL'
+  ]
 else
   cpp_args += [
     '-Wpedantic',
@@ -27,11 +30,36 @@ else
     '-Wformat=2',
     '-march=native',
     '-mtune=native',
-    '-O3'
+    '-O3',
+    '-ffast-math',
+    '-funroll-loops',
+    '-fomit-frame-pointer', # Free up a register
   ]
+
+  # GCC-specific optimisations
+  if cc.get_id() == 'gcc'
+    cpp_args += [
+      '-ftree-vectorize', # Auto-vectorization
+      '-fno-semantic-interposition' # Better inlining
+    ]
+  endif
+
+  # Clang-specific optimisations
+  if cc.get_id() == 'clang'
+    cpp_args += [
+      '-fvectorize',
+      '-fslp-vectorize'
+    ]
+  endif
 endif
 
 add_project_arguments(cpp_args, language : 'cpp')
+
+# Link-time optimization flags
+link_args = []
+if cc.get_id() != 'msvc'
+  link_args += ['-flto']
+endif
 
 # Dependencies
 sdl3_dep = dependency('sdl3', required: true)
@@ -57,5 +85,6 @@ executable(
   include_directories: inc,
   cpp_pch: pch,
   install: false,
-  dependencies: [sdl3_dep]
+  dependencies: [sdl3_dep],
+  link_args: link_args
 )

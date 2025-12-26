@@ -15,60 +15,98 @@ void Renderer::push(const GPU& gpu, const Triangle& polygon)
     {
         unpack_vertex(polygon.vertices[i], v[i].x, v[i].y);
         unpack_colour(polygon.colours[i], v[i].r, v[i].g, v[i].b);
-    }
-
-    // Add drawing offset
-    for (int i = 0;  i < 3; i++)
-    {
         v[i].x += (i32)gpu.drawing_offset_x;
         v[i].y += (i32)gpu.drawing_offset_y;
     }
 
     ensure_clockwise_vertex_ordering(v[0], v[1], v[2]);
 
-    // Compute bounding box of triangle
+    // Compute bounding box
     i32 min_x = std::min(v[0].x, std::min(v[1].x, v[2].x));
     i32 min_y = std::min(v[0].y, std::min(v[1].y, v[2].y));
     i32 max_x = std::max(v[0].x, std::max(v[1].x, v[2].x));
     i32 max_y = std::max(v[0].y, std::max(v[1].y, v[2].y));
 
-    // Confine box to within the drawing area
-    min_x = std::max(min_x, (i32)gpu.drawing_area_x1);
-    max_x = std::min(max_x, (i32)gpu.drawing_area_x2);
-    min_y = std::max(min_y, (i32)gpu.drawing_area_y1);
-    max_y = std::min(max_y, (i32)gpu.drawing_area_y2);
+    // Confine to drawing area and VRAM bounds - TODO: should wrap instead?
+    min_x = std::max(min_x, std::max((i32)gpu.drawing_area_x1, 0));
+    max_x = std::min(max_x, std::min((i32)gpu.drawing_area_x2, (i32)vram_width - 1));
+    min_y = std::max(min_y, std::max((i32)gpu.drawing_area_y1, 0));
+    max_y = std::min(max_y, std::min((i32)gpu.drawing_area_y2, (i32)vram_height - 1));
 
-    // Skip triangle if outside the drawing area
     if (min_x > max_x || min_y > max_y)
         return;
 
-    // Rasterise (note that min and max are inclusive)
+    // Precompute edge functions (incremental form)
+    const i32 A01 = v[0].y - v[1].y, B01 = v[1].x - v[0].x;
+    const i32 A12 = v[1].y - v[2].y, B12 = v[2].x - v[1].x;
+    const i32 A20 = v[2].y - v[0].y, B20 = v[0].x - v[2].x;
+
+    // Compute edge function values at top-left corner
+    Vertex p = { min_x, min_y };
+    i32 w0_row = get_cross_product_z(v[1], v[2], p);
+    i32 w1_row = get_cross_product_z(v[2], v[0], p);
+    i32 w2_row = get_cross_product_z(v[0], v[1], p);
+
+    // Precompute for tie-breaking
+    const bool is_top_left01 = (A01 < 0) || (A01 == 0 && B01 > 0);
+    const bool is_top_left12 = (A12 < 0) || (A12 == 0 && B12 > 0);
+    const bool is_top_left20 = (A20 < 0) || (A20 == 0 && B20 > 0);
+
+    // Precompute denominator for barycentric coords
+    const i32 denom = get_cross_product_z(v[0], v[1], v[2]);
+    const double inv_denom = 1.0 / (double)denom;
+
+    // Color deltas for interpolation
+    const double dr0 = v[0].r * inv_denom;
+    const double dr1 = v[1].r * inv_denom;
+    const double dr2 = v[2].r * inv_denom;
+    const double dg0 = v[0].g * inv_denom;
+    const double dg1 = v[1].g * inv_denom;
+    const double dg2 = v[2].g * inv_denom;
+    const double db0 = v[0].b * inv_denom;
+    const double db1 = v[1].b * inv_denom;
+    const double db2 = v[2].b * inv_denom;
+
+    u16* vram_ptr = &vram[min_y * vram_width + min_x];
+    const i32 vram_stride = vram_width;
+
     for (i32 y = min_y; y <= max_y; y++)
     {
+        i32 w0 = w0_row;
+        i32 w1 = w1_row;
+        i32 w2 = w2_row;
+
+        u16* pixel_ptr = vram_ptr;
+
         for (i32 x = min_x; x <= max_x; x++)
         {
-            if (is_inside_triangle(x, y, v[0], v[1], v[2]))
+            // Check if inside with proper tie-breaking
+            bool inside = (w0 > 0 || (w0 == 0 && is_top_left12)) &&
+                         (w1 > 0 || (w1 == 0 && is_top_left20)) &&
+                         (w2 > 0 || (w2 == 0 && is_top_left01));
+
+            if (inside)
             {
-                // TODO: what happens when co-ord outside of VRAM?
-                if (y < 0 || y >= vram_height) continue;
-                if (x < 0 || x >= vram_width) continue;
+                // Interpolate using precomputed values
+                u8 r = (u8)std::round(w0 * dr0 + w1 * dr1 + w2 * dr2);
+                u8 g = (u8)std::round(w0 * dg0 + w1 * dg1 + w2 * dg2);
+                u8 b = (u8)std::round(w0 * db0 + w1 * db1 + w2 * db2);
 
-                const std::array<double, 3> lambda = get_barycentric_coordinates(
-                    x, y, v[0], v[1], v[2]
-                );
-
-                // Interpolate colours
-                const double rs[3] = { (double)v[0].r, (double)v[1].r, (double)v[2].r };
-                const double gs[3] = { (double)v[0].g, (double)v[1].g, (double)v[2].g };
-                const double bs[3] = { (double)v[0].b, (double)v[1].b, (double)v[2].b };
-                u8 r = (u8)std::round(lambda[0] * rs[0] + lambda[1] * rs[1] + lambda[2] * rs[2]);
-                u8 g = (u8)std::round(lambda[0] * gs[0] + lambda[1] * gs[1] + lambda[2] * gs[2]);
-                u8 b = (u8)std::round(lambda[0] * bs[0] + lambda[1] * bs[1] + lambda[2] * bs[2]);
-
-                // TODO: deal with masking bit, etc.
-                vram[y * vram_width + x] = pack_colour(r, g, b, false);
+                *pixel_ptr = pack_colour(r, g, b, false);
             }
+
+            // Increment edge functions
+            w0 += A12;
+            w1 += A20;
+            w2 += A01;
+            pixel_ptr++;
         }
+
+        // Move to next row
+        w0_row += B12;
+        w1_row += B20;
+        w2_row += B01;
+        vram_ptr += vram_stride;
     }
 }
 
@@ -115,21 +153,4 @@ bool Renderer::is_inside_triangle(const i32 x, const i32 y, const Vertex& v0, co
     }
 
     return true;
-}
-
-std::array<double, 3> Renderer::get_barycentric_coordinates(const i32 x, const i32 y, Vertex v0, Vertex v1, Vertex v2) const
-{
-    const i32 denominator = get_cross_product_z(v0, v1, v2);
-    if (denominator == 0)
-    {
-        // TODO: think actually you just don't draw anything (i.e. skip earlier)?
-        //       vertices are collinear
-        return { 1.0 / 3.0, 1.0 / 3.0, 1.0 / 3.0 };
-    }
-
-    const double lambda0 = (double)(get_cross_product_z(v1, v2, Vertex { x, y })) / (double)denominator;
-    const double lambda1 = (double)(get_cross_product_z(v2, v0, Vertex { x, y })) / (double)denominator;
-    const double lambda2 = 1.0 - lambda0 - lambda1;
-
-    return { lambda0, lambda1, lambda2 };
 }

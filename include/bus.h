@@ -63,6 +63,8 @@ private:
     u32 io_read_u32(const u32 address);
     void io_write_u16(const u32 address, const u16 value);
     void io_write_u32(const u32 address, const u32 value);
+    u8* get_bank_address(const u32 address);
+    u32 get_physical_address(const u32 address) const;
 
     u8 bios[4096 * 1024]; // 4 KB
     u8 ram[2 * 1024 * 1024]; // 2 MB
