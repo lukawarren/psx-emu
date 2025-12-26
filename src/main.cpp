@@ -38,7 +38,7 @@ int main()
         exit(1);
     }
 
-    CPU cpu;
+    CPU* cpu = new CPU();
     bool running = true;
     SDL_Event event;
 
@@ -54,13 +54,13 @@ int main()
         const u64 frame_start = SDL_GetPerformanceCounter();
 
         for (u32 i = 0; i < CPU::frequency / 60; i++)
-            cpu.execute();
+            cpu->execute();
 
         // Update texture with VRAM
         SDL_UpdateTexture(
             texture,
             nullptr,
-            cpu.bus.gpu.renderer.get_vram(),
+            cpu->bus.gpu.renderer.get_vram(),
             Renderer::vram_width * sizeof(uint16_t)
         );
 

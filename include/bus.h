@@ -1,6 +1,8 @@
 #pragma once
 #include "gpu.h"
 
+class CPU;
+
 /*
         KUSEG     KSEG0     KSEG1
     00000000h 80000000h A0000000h  2048K  Main RAM (first 64K reserved for BIOS)
@@ -27,8 +29,9 @@
 class Bus
 {
 public:
-    Bus(const std::string& bios_path);
+    Bus(CPU& cpu, const std::string& bios_path);
     void clock();
+    void sideload_exe(const std::string& path);
 
     u8 read_u8(const u32 address);
     u16 read_u16(const u32 address);
@@ -58,7 +61,6 @@ public:
     GPU gpu;
 
 private:
-    void read_from_file(u8* buffer, const std::string& filename);
     u16 io_read_u16(const u32 address);
     u32 io_read_u32(const u32 address);
     void io_write_u16(const u32 address, const u16 value);
@@ -66,8 +68,14 @@ private:
     u8* get_bank_address(const u32 address);
     u32 get_physical_address(const u32 address) const;
 
+    std::pair<std::ifstream, std::streamsize> read_file(const std::string& filename, const size_t max_size) const;
+    void read_file(u8* buffer, size_t max_size, const std::string& filename) const;
+    u8* read_file(const std::string& filename) const;
+
     u8 bios[4096 * 1024]; // 4 KB
     u8 ram[2 * 1024 * 1024]; // 2 MB
+    u8 scratchpad[1024]; // 1 KB
+    CPU& cpu;
 
     inline u8 get_dma_priority(const u8 channel) const
     {

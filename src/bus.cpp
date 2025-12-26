@@ -1,12 +1,13 @@
 #include "bus.h"
+#include "cpu.h"
 
 #define WITHIN(base, size) (physical_address >= base && physical_address < base + size)
 
-Bus::Bus(const std::string& bios_path)
+Bus::Bus(CPU& cpu, const std::string& bios_path) : cpu(cpu)
 {
     memset(bios, 0, sizeof(bios));
     memset(ram, 0, sizeof(ram));
-    read_from_file(bios, bios_path);
+    read_file(bios, 512 * 1024, bios_path);
 }
 
 void Bus::clock()
@@ -128,6 +129,46 @@ void Bus::clock()
     }
 }
 
+void Bus::sideload_exe(const std::string& path)
+{
+    const u8* exe = read_file(path);
+
+    const uint32_t initial_pc =
+        (u32)(exe[0x10]) |
+        ((u32)(exe[0x11]) << 8) |
+        ((u32)(exe[0x12]) << 16) |
+        ((u32)(exe[0x13]) << 24);
+
+    const uint32_t initial_r28 =
+        (u32)(exe[0x14]) |
+        ((u32)(exe[0x15]) << 8) |
+        ((u32)(exe[0x16]) << 16) |
+        ((u32)(exe[0x17]) << 24);
+
+    const uint32_t exe_ram_addr =
+        ((u32)(exe[0x18]) |
+        ((u32)(exe[0x19]) << 8) |
+        ((u32)(exe[0x1A]) << 16) |
+        ((u32)(exe[0x1B]) << 24)) & 0x1FFFFF;
+
+    const uint32_t exe_size_2kb =
+        (u32)(exe[0x1C]) |
+        ((u32)(exe[0x1D]) << 8) |
+        ((u32)(exe[0x1E]) << 16) |
+        ((u32)(exe[0x1F]) << 24);
+
+    const uint32_t initial_sp =
+        (u32)(exe[0x30]) |
+        ((u32)(exe[0x31]) << 8) |
+        ((u32)(exe[0x32]) << 16) |
+        ((u32)(exe[0x33]) << 24);
+
+    memcpy(ram + exe_ram_addr, &exe[2048], exe_size_2kb);
+    cpu.configure_from_exe(initial_r28, initial_sp, initial_pc);
+
+    delete[] exe;
+}
+
 u8 Bus::read_u8(const u32 address)
 {
     const u32 physical_address = get_physical_address(address);
@@ -189,6 +230,13 @@ void Bus::write_u8(const u32 address, const u8 value)
         return;
     }
 
+    // Scratchpad
+    if (physical_address >= 0x1F800000 && physical_address < 0x1F800000 + 1024)
+    {
+        scratchpad[physical_address - 0x1F800000] = value;
+        return;
+    }
+
     // Expansion 1
     if (WITHIN(0x1F000000, 8192 * 1024))
         return;
@@ -239,27 +287,6 @@ void Bus::write_u32(const u32 address, const u32 value)
     write_u8(physical_address + 1, (u8)(value >> 8));
     write_u8(physical_address + 2, (u8)(value >> 16));
     write_u8(physical_address + 3, (u8)(value >> 24));
-}
-
-void Bus::read_from_file(u8* buffer, const std::string& filename)
-{
-    // Check isn't folder
-    if (!std::filesystem::is_regular_file(filename))
-        throw std::runtime_error(filename + " is not a file");
-
-    // Open file
-    std::ifstream file(filename, std::ios::binary);
-    if (!file.is_open())
-        throw std::runtime_error("unable to open file " + filename);
-
-    // Get file length
-    file.seekg(0, std::ios::end);
-    const auto file_length = file.tellg();
-    file.seekg(0, std::ios::beg);
-
-    // Read file contents into buffer
-    file.read(reinterpret_cast<char*>(buffer), file_length);
-    file.close();
 }
 
 u16 Bus::io_read_u16(const u32 address)
@@ -534,5 +561,47 @@ u8* Bus::get_bank_address(const u32 physical_address)
     if (physical_address >= 0x1FC00000 && physical_address < 0x1FC00000 + 512 * 1024)
         return &bios[physical_address & 0x3FFFFF];
 
+    // Scratchpad
+    if (physical_address >= 0x1F800000 && physical_address < 0x1F800000 + 1024)
+        return &scratchpad[physical_address - 0x1F800000];
+
     return nullptr;
+}
+
+std::pair<std::ifstream, std::streamsize> Bus::read_file(const std::string& filename, const size_t max_size) const
+{
+    // Check isn't folder
+    if (!std::filesystem::is_regular_file(filename))
+        throw std::runtime_error(filename + " is not a file");
+
+    // Open file
+    std::ifstream file(filename, std::ios::binary);
+    if (!file.is_open())
+        throw std::runtime_error("unable to open file " + filename);
+
+    // Get file length
+    file.seekg(0, std::ios::end);
+    const auto file_length = file.tellg();
+    file.seekg(0, std::ios::beg);
+
+    if (max_size != 0 && (size_t)file_length > max_size)
+        throw std::runtime_error(filename + " is too large");
+
+    return { std::move(file), file_length };
+}
+
+void Bus::read_file(u8* buffer, const size_t max_size, const std::string& filename) const
+{
+    auto file = read_file(filename, max_size);
+    file.first.read(reinterpret_cast<char*>(buffer), file.second);
+    file.first.close();
+}
+
+u8* Bus::read_file(const std::string& filename) const
+{
+    auto file = read_file(filename, 0);
+    u8* buffer = new u8[file.second];
+    file.first.read(reinterpret_cast<char*>(buffer), file.second);
+    file.first.close();
+    return buffer;
 }

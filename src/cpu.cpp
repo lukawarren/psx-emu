@@ -1,9 +1,11 @@
 #include "cpu.h"
 #include "trace.h"
 
+#define ENABLE_TRACE 0
 #define ENABLE_SERIAL 1
+#define SIDELOAD_EXE 1
 
-CPU::CPU() : bus("../SCPH1001.bin")
+CPU::CPU() : bus(*this, "../SCPH1001.bin")
 {
     pc = 0xbfc00000;
     next_pc = pc + 4;
@@ -43,9 +45,22 @@ void CPU::execute()
     const u32 instruction = bus.read_u32(pc);
     previous_pc = pc;
 
+#if ENABLE_TRACE
+    trace(instruction);
+#endif
+
 #if ENABLE_SERIAL
     if (((pc & 0x1FFFFFFF) == 0xA0 && registers[9] == 0x3C) || ((pc & 0x1FFFFFFF) == 0xB0 && registers[9] == 0x3D))
         printf("%c", (u8)registers[4]);
+#endif
+
+#if SIDELOAD_EXE
+    static bool did_sideload = false;
+    if (pc == 0x80030000 && !did_sideload)
+    {
+        did_sideload = true;
+        bus.sideload_exe("../tests/gpu/quad/quad.exe");
+    }
 #endif
 
     // Get next program counter

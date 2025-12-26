@@ -12,6 +12,18 @@ public:
     // Frequency in Hz
     constexpr static u32 frequency = 33868800;
 
+    inline void configure_from_exe(const u32 r28, const u32 sp, const u32 pc)
+    {
+        registers[28] = r28;
+        if (sp != 0)
+        {
+            registers[29] = sp;
+            registers[30] = sp;
+        }
+        this->pc = pc;
+        next_pc = pc + 4;
+    }
+
 private:
     /*
         Name       Alias    Common Usage
