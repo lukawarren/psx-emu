@@ -4,8 +4,9 @@ project(
   version : '0.1.0',
   default_options : [
     'cpp_std=c++20',
-    'buildtype=debugoptimized',
-    'warning_level=3'
+    'buildtype=release',
+    'warning_level=3',
+    'b_lto=true'
   ]
 )
 
@@ -24,7 +25,9 @@ else
     '-Wundef',
     '-Wdouble-promotion',
     '-Wformat=2',
-    '-march=native'
+    '-march=native',
+    '-mtune=native',
+    '-O3'
   ]
 endif
 
