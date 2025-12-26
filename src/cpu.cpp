@@ -1,6 +1,8 @@
 #include "cpu.h"
 #include "trace.h"
 
+#define ENABLE_SERIAL 1
+
 CPU::CPU() : bus("../SCPH1001.bin")
 {
     pc = 0xbfc00000;
@@ -41,13 +43,9 @@ void CPU::execute()
     const u32 instruction = bus.read_u32(pc);
     previous_pc = pc;
 
-#if 0
-    static int i = 0;
-    if (i++ > 100000000)
-    trace(instruction);
-    if (i++ > 100000000)
-    dbg(dbg::hex(bus.read_u32(0x800892bc)));
-    if (i > 100000000 + 10000) exit(1);
+#if ENABLE_SERIAL
+    if (((pc & 0x1FFFFFFF) == 0xA0 && registers[9] == 0x3C) || ((pc & 0x1FFFFFFF) == 0xB0 && registers[9] == 0x3D))
+        printf("%c", (u8)registers[4]);
 #endif
 
     // Get next program counter
