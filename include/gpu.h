@@ -49,8 +49,9 @@ private:
     {
         u16 destination_x;
         u16 destination_y;
+        u32 required_blits;
+        u32 blit_count;
         u16 width;
-        u16 height;
     } gp0_cpu_to_vram;
 
     // GP0 upper bits == 0b001

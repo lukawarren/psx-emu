@@ -32,6 +32,7 @@ public:
         }
     };
 
+    void blit(const u32 x, const u32 y, const u16 pixel);
     void push(const GPU& gpu, const Triangle& polygon);
     void render();
 

@@ -47,13 +47,13 @@ void Bus::clock()
             // TODO: if block_size > length device can take, presumably drop
             // TODO: respect DREQ
             for (u64 i = 0; i < length; i++)
-                gpu.dma_send(read_u32((u32)(address + i)));
+                gpu.dma_send(read_u32((u32)(address + i * 4)));
 
             // Set amount of blocks remaining to 0 in block control register
             dma_block_control_channel_2 &= 0x0000FFFF;
 
             // Set relevant MADR to the end marker
-            dma_base_address_channel_6 = 0xFFFFFF;
+            dma_base_address_channel_2 = 0xFFFFFF;
         }
         else
         {

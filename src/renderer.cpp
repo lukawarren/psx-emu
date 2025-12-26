@@ -1,6 +1,13 @@
 #include "renderer.h"
 #include "gpu.h"
 
+void Renderer::blit(const u32 x, const u32 y, const u16 pixel)
+{
+    // Wrap around
+    // TODO: respect mask setting
+    vram[(y % vram_height) * vram_width + (x % vram_width)] = pixel;
+}
+
 void Renderer::push(const GPU& gpu, const Triangle& polygon)
 {
     Vertex v[3];

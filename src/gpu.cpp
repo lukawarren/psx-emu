@@ -69,15 +69,35 @@ void GPU::send_gp0_command(const u32 opcode)
         }
         else if (gp0_input_state.header_count == 1)
         {
-            gp0_cpu_to_vram.width = (u16)opcode;
-            gp0_cpu_to_vram.height = (u16)(opcode >> 16);
+            const u16 width = (u16)opcode;
+            const u16 height = (u16)(opcode >> 16);
+            gp0_cpu_to_vram.required_blits = (u32)width * (u32)height;
+            gp0_cpu_to_vram.blit_count = 0;
+            gp0_cpu_to_vram.width = width;
 
             // Round up image size as must send full 32 bits; not just last 16-bit pixel
             // Divide by 2 as two pixels per 32-bit packet
-            gp0_input_state.remaining_words = ((gp0_cpu_to_vram.width * gp0_cpu_to_vram.height + 1U) & ~1U) / 2U;
+            gp0_input_state.remaining_words = ((gp0_cpu_to_vram.required_blits + 1U) & ~1U) / 2U;
         }
         else
         {
+            for (int i = 0; i < 2; i++)
+            {
+                // Copy pixel
+                const u16 x = (u16)(gp0_cpu_to_vram.blit_count % (u32)gp0_cpu_to_vram.width);
+                const u16 y = (u16)(gp0_cpu_to_vram.blit_count / (u32)gp0_cpu_to_vram.width);
+                renderer.blit(
+                    gp0_cpu_to_vram.destination_x + x,
+                    gp0_cpu_to_vram.destination_y + y,
+                    (u16)(i == 0 ? (opcode & 0xFFFF) : (opcode >> 16))
+                );
+                gp0_cpu_to_vram.blit_count++;
+
+                // Copy second pixel if there is one
+                if (gp0_cpu_to_vram.blit_count >= gp0_cpu_to_vram.required_blits)
+                    break;
+            }
+
             if (--gp0_input_state.remaining_words == 0)
                 gp0_input_state.reset();
             return;
