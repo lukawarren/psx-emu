@@ -453,6 +453,13 @@ void GPU::send_gp1_command(const u32 opcode)
         return;
     }
 
+    // Read GPU internal register
+    if (command == 0x10)
+    {
+        dbg("TODO: GP1 0x10");
+        return;
+    }
+
     dbg("TODO: GP1 command", dbg::hex(command));
     exit(1);
 }

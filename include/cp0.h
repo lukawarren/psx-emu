@@ -18,7 +18,6 @@ public:
             case 9:
             case 11:
                 dbg("TODO: CP0 breakpoint registers");
-                if (value != 0) exit(1);
                 break;
 
             case 12:
@@ -32,7 +31,6 @@ public:
 
             default:
                 dbg("TODO: unknown CP0 register", reg, value);
-                if (value != 0) exit(1);
         }
     }
 
@@ -43,7 +41,7 @@ public:
             case 12: return sr;
             case 13: return cause;
             case 14: return epc;
-            default: dbg("TODO: unknown CP0 register", reg); exit(1);
+            default: dbg("TODO: unknown CP0 register", reg);
         }
 
         return 0;

@@ -37,7 +37,7 @@ void CPU::execute()
         previous_pc = pc;
         raise_exception(Exception::AddressErrorLoad);
         process_load_delay();
-        exit(1);
+        return;
     }
 
     // Fetch opcode
@@ -60,6 +60,7 @@ void CPU::execute()
     {
         did_sideload = true;
         bus.sideload_exe("../tests/gpu/triangle/triangle.exe");
+        //bus.sideload_exe("../tests/psxtest_cpu.exe");
     }
 #endif
 
@@ -699,6 +700,11 @@ void CPU::div(const u32 instruction)
     {
         lo = dividend < 0 ? 1 : 0xffffffff;
         hi = (u32)dividend;
+    }
+    else if (divisor == -1 && (u32)dividend == -0x80000000)
+    {
+        lo = -0x80000000;
+        hi = 0;
     }
     else
     {
