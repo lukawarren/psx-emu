@@ -190,9 +190,14 @@ void Renderer::push(const GPU& gpu, const Rectangle& rectangle)
     }
     else
     {
+        // TODO: masking?
+        u8 r, g, b;
+        unpack_colour(rectangle.colour, r, g, b);
+        const u16 colour = pack_colour(r, g, b, false);
+
         for (u16 y = 0; y < rectangle.height; y++)
             for (u16 x = 0; x < rectangle.width; x++)
-                vram[(y0 + y) * vram_width + x0 + x] = (u16)(rectangle.colour & 0xffff);
+                vram[(y0 + y) * vram_width + x0 + x] = (u16)(colour);
     }
 }
 

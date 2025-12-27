@@ -1,5 +1,6 @@
 #pragma once
 #include "gpu.h"
+#include "interrupts.h"
 
 class CPU;
 
@@ -39,6 +40,13 @@ public:
     void write_u8(const u32 address, const u8 value);
     void write_u16(const u32 address, const u16 value);
     void write_u32(const u32 address, const u32 value);
+
+    inline u16 interrupt_pending() const { return (i_stat & i_mask) != 0; }
+
+    void fire_interrupt(const Interrupt interrupt)
+    {
+        i_stat |= 1 << (u32)interrupt;
+    }
 
     u32 i_stat; // Interrupt status register
     u32 i_mask; // Interrupt mask register

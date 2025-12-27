@@ -2,34 +2,19 @@
 #include "trace.h"
 
 #define ENABLE_TRACE 0
-#define ENABLE_SERIAL 1
-#define SIDELOAD_EXE 1
+#define ENABLE_SERIAL 0
+#define SIDELOAD_EXE 0
 
 CPU::CPU() : bus(*this, "../SCPH1001.bin")
 {
-    pc = 0xbfc00000;
+    pc = 0xBFC00000;
     next_pc = pc + 4;
     registers[0] = 0;
 }
 
-void CPU::execute()
+void CPU::clock()
 {
     delayed_load_next.first = 0;
-
-    const auto process_load_delay = [&]()
-    {
-        if (delayed_load.first != 0)
-        {
-            registers[delayed_load.first] = delayed_load.second;
-            delayed_load.first = 0;
-        }
-
-        if (delayed_load_next.first != 0)
-        {
-            delayed_load = delayed_load_next;
-            delayed_load_next = {};
-        }
-    };
 
     // Check for misaligned access
     if ((pc & 0b11) != 0)
@@ -63,16 +48,36 @@ void CPU::execute()
         // bus.sideload_exe("../tests/gpu/triangle/triangle.exe");
         // bus.sideload_exe("../tests/gpu/rectangles/rectangles.exe");
         // bus.sideload_exe("../tests/gpu/texture-overflow/texture-overflow.exe");
-        bus.sideload_exe("../tests/gpu/texture-flip/texture-flip.exe");
-        // bus.sideload_exe("../tests/psxtest_cpu.exe");
+        // bus.sideload_exe("../tests/gpu/texture-flip/texture-flip.exe");
+        bus.sideload_exe("../tests/psxtest_cpu.exe");
     }
 #endif
+
+    // Check for interrupts
+    cp0.set_interrupt_due(bus.interrupt_pending());
+    if (cp0.interrupt_pending())
+    {
+        // TODO: execute GTE command regardless
+        if ((instruction & 0xFE000000) == 0x4A000000)
+        {
+            dbg("TODO");
+            exit(1);
+        }
+        raise_exception(Exception::Interrupt);
+        process_load_delay();
+    }
 
     // Get next program counter
     pc = next_pc;
     next_pc = pc + 4;
     due_branch_delay = false;
 
+    execute(instruction);
+    process_load_delay();
+}
+
+void CPU::execute(const u32 instruction)
+{
     // Decode
     switch (instruction >> 26)
     {
@@ -188,10 +193,21 @@ void CPU::execute()
             exit(1);
             break;
     }
+}
 
-    process_load_delay();
+void CPU::process_load_delay()
+{
+    if (delayed_load.first != 0)
+    {
+        registers[delayed_load.first] = delayed_load.second;
+        delayed_load.first = 0;
+    }
 
-    bus.clock();
+    if (delayed_load_next.first != 0)
+    {
+        delayed_load = delayed_load_next;
+        delayed_load_next = {};
+    }
 }
 
 void CPU::write_register(const u32 reg, const u32 value)
@@ -261,8 +277,11 @@ void CPU::raise_exception(const Exception exception)
     if (exception == Exception::Breakpoint) handler += 0x40;
     else handler += 0x80;
 
+    // Update status register
+    cp0.sr.on_exception();
+
     // Update CAUSE register with exception code
-    cp0.cause = (u32)exception << 2;
+    cp0.cause = (cp0.cause & 0b11111111111111111111111110000011) | ((u32)exception << 2);
 
     // Point EPC to the PC
     cp0.epc = previous_pc - (due_branch_delay ? 4 : 0);

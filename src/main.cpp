@@ -53,8 +53,14 @@ int main()
 
         const u64 frame_start = SDL_GetPerformanceCounter();
 
-        for (u32 i = 0; i < CPU::frequency / 60; i++)
-            cpu->execute();
+        // Assume each instruction takes about 2 cycles
+        for (u32 i = 0; i < CPU::frequency / 60 / 2; i++)
+        {
+            cpu->clock();
+            cpu->bus.clock();
+        }
+
+        cpu->bus.fire_interrupt(Interrupt::VBlank);
 
         // Update texture with VRAM
         SDL_UpdateTexture(

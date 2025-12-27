@@ -392,12 +392,10 @@ void Bus::io_write_u16(const u32 address, const u16 value)
     if (address >= 0x1F801DC0 && address <= 0x1F801DFE)
         return;
 
-    // I_STAT - NOTE: writing is to "acknowledge"
+    // I_STAT - NOTE: writing is to "acknowledge" (i.e. set to 0)
     if (address == 0x1F801070)
     {
-        i_stat = value;
-        if (value != 0)
-            dbg("TODO: unsupported i_stat value", dbg::hex(value));
+        i_stat &= value;
         return;
     }
 
@@ -405,7 +403,7 @@ void Bus::io_write_u16(const u32 address, const u16 value)
     if (address == 0x1F801074)
     {
         i_mask = value;
-        if (value != 0)
+        if (value != 0 && value != 1)
             dbg("TODO: unsupported i_mask value", dbg::hex(value));
         return;
     }
@@ -458,19 +456,14 @@ void Bus::io_write_u32(const u32 address, const u32 value)
     if (address >= 0x1F801DC0 && address <= 0x1F801DFE)
         return;
 
-    // Cache configuration register
+    // Cache configuration register (TODO)
     if (address == 0xFFFE0130)
-    {
-        dbg("TODO: wrote to cache configuration register", dbg::hex(value));
         return;
-    }
 
     // I_STAT - NOTE: writing is to "acknowledge"
     if (address == 0x1F801070)
     {
-        i_stat = value;
-        if (value != 0)
-            dbg("TODO: unsupported i_stat value", dbg::hex(value));
+        i_stat &= value;
         return;
     }
 
@@ -478,7 +471,7 @@ void Bus::io_write_u32(const u32 address, const u32 value)
     if (address == 0x1F801074)
     {
         i_mask = value;
-        if (value != 0)
+        if (value != 0 && value != 1)
             dbg("TODO: unsupported i_mask value", dbg::hex(value));
         return;
     }

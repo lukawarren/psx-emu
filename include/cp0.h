@@ -81,7 +81,6 @@ public:
             // Read-only
             case 6:
             case 8:
-            case 13:
             case 14:
             case 15:
             break;
@@ -92,6 +91,12 @@ public:
             case 9: bdam = value; break;
             case 11: bpcm = value; break;
             case 12: sr.write(value); break;
+
+            case 13:
+                // Only bits 8 and 9 are writable
+                cause = cause & 0b11111111111111111111110011111111;
+                cause = cause | (value & 0b11111111111111111111110011111111);
+                break;
 
             default: dbg("TODO: unknown CP0 register", reg, value);
         }
@@ -136,5 +141,17 @@ public:
                 dbg("TODO: unsupported PSX CP0 operation", dbg::hex(opcode & 0x3f));
                 exit(1);
         }
+    }
+
+    void set_interrupt_due(const bool due)
+    {
+        if (due) cause |= 1 << 10;
+        else cause &= (u32)~(1 << 10);
+    }
+
+    bool interrupt_pending() const
+    {
+        const u32 cause_interrupt_bits = cause >> 8;
+        return sr.interrupts_enabled && (sr.interrupt_mask & cause_interrupt_bits) != 0;
     }
 };

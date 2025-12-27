@@ -6,7 +6,8 @@ class CPU
 {
 public:
     CPU();
-    void execute();
+    void clock();
+
     Bus bus;
 
     // Frequency in Hz
@@ -47,6 +48,9 @@ private:
     u32 hi;
     u32 lo;
     CP0 cp0;
+
+    void execute(const u32 instruction);
+    void process_load_delay();
 
     /*
         Note that due to "load delay", load instructions are async and so the
@@ -89,6 +93,7 @@ private:
     // Exceptions
     enum class Exception
     {
+        Interrupt = 0x0,
         AddressErrorLoad = 0x4,
         AddressErrorStore = 0x5,
         Syscall = 0x8,
