@@ -187,6 +187,10 @@ u8 Bus::read_u8(const u32 address)
     if (WITHIN(0x1F801800, 4))
         return 0;
 
+    // Serial something or other
+    if (address == 0x1F801040) return 0;
+    if (address == 0x1F80104A) return 0;
+
     dbg("TODO: unknown bus read", dbg::hex(address), dbg::hex(physical_address));
     exit(1);
 }
@@ -196,6 +200,10 @@ u16 Bus::read_u16(const u32 address)
     const u32 physical_address = get_physical_address(address);
     if (u8* ptr = get_bank_address(physical_address))
         return (u32)ptr[0] | ((u32)ptr[1] << 8);
+
+    // Serial something or other
+    if (address == 0x1F801040) return 0;
+    if (address == 0x1F80104A) return 0;
 
     // I/O
     if (WITHIN(0x1F801000, 4096) || address == 0xFFFE0130)
@@ -210,6 +218,10 @@ u32 Bus::read_u32(const u32 address)
     const u32 physical_address = get_physical_address(address);
     if (u8* ptr = get_bank_address(physical_address))
         return (u32)ptr[0] | ((u32)ptr[1] << 8) | ((u32)ptr[2] << 16) | ((u32)ptr[3] << 24);
+
+    // Serial something or other
+    if (address == 0x1F801040) return 0;
+    if (address == 0x1F80104A) return 0;
 
     // I/O
     if (WITHIN(0x1F801000, 4096) || address == 0xFFFE0130)
@@ -530,6 +542,10 @@ void Bus::io_write_u32(const u32 address, const u32 value)
     // GPU
     if (address == 0x1F801810) { gpu.send_gp0_command(value); return; }
     if (address == 0x1F801814) { gpu.send_gp1_command(value); return; }
+
+    // Serial something or other
+    if (address == 0x1F801040) return;
+    if (address == 0x1F80104A) return;
 
     dbg("TODO: unrecognised I/O write", dbg::hex(address), dbg::hex(value));
     exit(1);

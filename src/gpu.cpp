@@ -185,12 +185,86 @@ void GPU::send_gp0_command(const u32 opcode)
         if (++gp0_input_state.header_count == 2)
         {
             gp0_input_state.reset();
-            renderer.push({
+            renderer.push(Renderer::QuickRectangle {
                 gp0_quick_rectangle_fill.colour,
                 gp0_quick_rectangle_fill.x,
                 gp0_quick_rectangle_fill.y,
                 gp0_quick_rectangle_fill.width,
                 gp0_quick_rectangle_fill.height
+            });
+        }
+        return;
+    }
+
+    // Continuation of rectangle
+    if (gp0_input_state.get_mode() == GP0Mode::Rectangle)
+    {
+        bool done = false;
+
+        if (gp0_input_state.header_count == 0)
+        {
+            gp0_rectangle.vertex = opcode;
+
+            if (!gp0_rectangle.is_textured && gp0_rectangle.size != Rectangle::Size::Variable)
+                done = true;
+        }
+        else if (gp0_input_state.header_count == 1)
+        {
+            if (gp0_rectangle.is_textured)
+            {
+                gp0_rectangle.uv = opcode;
+                if (gp0_rectangle.size != Rectangle::Size::Variable)
+                    done = true;
+            }
+            else if (gp0_rectangle.size == Rectangle::Size::Variable)
+            {
+                gp0_rectangle.width = (u16)opcode;
+                gp0_rectangle.height = (u16)(opcode >> 16);
+                done = true;
+            }
+        }
+        else if (gp0_input_state.header_count == 2)
+        {
+            gp0_rectangle.width = (u16)opcode;
+            gp0_rectangle.height = (u16)(opcode >> 16);
+            done = true;
+        }
+
+        gp0_input_state.header_count++;
+
+        if (done)
+        {
+            gp0_input_state.reset();
+
+            u16 width, height;
+            switch (gp0_rectangle.size)
+            {
+                case Rectangle::Size::Variable:
+                    width = gp0_rectangle.width;
+                    height = gp0_rectangle.height;
+                    break;
+
+                case Rectangle::Size::SinglePixel:
+                    width = height = 1;
+                    break;
+
+                case Rectangle::Size::Sprite8x8:
+                    width = height = 8;
+                    break;
+
+                default:
+                    width = height = 16;
+            }
+
+            renderer.push(Renderer::Rectangle {
+                gp0_rectangle.is_textured,
+                gp0_rectangle.is_transparent,
+                gp0_rectangle.use_raw_texture,
+                gp0_rectangle.colour,
+                gp0_rectangle.vertex,
+                gp0_rectangle.uv,
+                width,
+                height,
             });
         }
         return;
@@ -314,6 +388,18 @@ void GPU::send_gp0_command(const u32 opcode)
     {
         gp0_input_state.set_mode(GP0Mode::QuickRectangleFill);
         gp0_quick_rectangle_fill.colour = opcode & 0xFFFFFF;
+        return;
+    }
+
+    // Rectangle
+    if (mode == 0b011)
+    {
+        gp0_input_state.set_mode(GP0Mode::Rectangle);
+        gp0_rectangle.size = (Rectangle::Size)((opcode >> 27) & 0b11);
+        gp0_rectangle.is_textured = ((opcode >> 26) & 0b1) != 0;
+        gp0_rectangle.is_transparent = ((opcode >> 25) & 0b1) != 0;
+        gp0_rectangle.use_raw_texture = ((opcode >> 24) & 0b1) != 0;
+        gp0_rectangle.colour = opcode & 0xFFFFFF;
         return;
     }
 

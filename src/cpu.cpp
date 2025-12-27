@@ -59,8 +59,8 @@ void CPU::execute()
     if (pc == 0x80030000 && !did_sideload)
     {
         did_sideload = true;
-        bus.sideload_exe("../tests/gpu/triangle/triangle.exe");
-        //bus.sideload_exe("../tests/psxtest_cpu.exe");
+        // bus.sideload_exe("../tests/gpu/triangle/triangle.exe");
+        bus.sideload_exe("../tests/psxtest_cpu.exe");
     }
 #endif
 
@@ -649,8 +649,8 @@ void CPU::syscall(const u32 instruction)
 
 void CPU::_break(const u32 instruction)
 {
-    dbg("todo");
-    exit(1);(void)instruction;
+    (void)instruction;
+    raise_exception(Exception::Breakpoint);
 }
 
 void CPU::mfhi(const u32 instruction)
@@ -734,13 +734,15 @@ void CPU::add(const u32 instruction)
 {
     const i32 rs = (i32)registers[get_rs(instruction)];
     const i32 rt = (i32)registers[get_rt(instruction)];
-    if ((rs > 0  && rt > std::numeric_limits<i32>::max() - rs) ||
-        (rs < 0 && rt > std::numeric_limits<i32>::min() - rs))
+    const i32 res = rs + rt;
+
+    if (((rs ^ res) & (rt ^ res)) < 0)
     {
         raise_exception(Exception::ArithmeticOverflow);
         return;
     }
-    write_register(get_rd(instruction), (u32)(rs + rt));
+
+    write_register(get_rd(instruction), (u32)res);
 }
 
 void CPU::addu(const u32 instruction)
@@ -752,13 +754,15 @@ void CPU::sub(const u32 instruction)
 {
     const i32 rs = (i32)registers[get_rs(instruction)];
     const i32 rt = (i32)registers[get_rt(instruction)];
-    if ((rs < 0 && rt > std::numeric_limits<i32>::max() + rs) ||
-        (rs > 0 && rt < std::numeric_limits<i32>::min() + rs))
+    const i32 res = rs - rt;
+
+    if (((rs ^ rt) & (rs ^ res)) < 0)
     {
         raise_exception(Exception::ArithmeticOverflow);
         return;
     }
-    write_register(get_rd(instruction), (u32)(rs - rt));
+
+    write_register(get_rd(instruction), (u32)res);
 }
 
 void CPU::subu(const u32 instruction)

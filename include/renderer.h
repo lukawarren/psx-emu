@@ -32,7 +32,7 @@ public:
         }
     };
 
-    struct Rectangle
+    struct QuickRectangle
     {
         u32 colour;
         u16 x;
@@ -41,8 +41,21 @@ public:
         u16 height;
     };
 
+    struct Rectangle
+    {
+        bool is_textured;
+        bool is_transparent;
+        bool use_raw_texture;
+        u32 colour;
+        u32 vertex;
+        u32 uv;
+        u16 width;
+        u16 height;
+    } gp0_rectangle;
+
     void blit(const u32 x, const u32 y, const u16 pixel);
     void push(const GPU& gpu, const Triangle& polygon);
+    void push(const QuickRectangle& rectangle);
     void push(const Rectangle& rectangle);
 
     inline const u16* get_vram() const { return vram; }

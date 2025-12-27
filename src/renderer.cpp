@@ -110,7 +110,7 @@ void Renderer::push(const GPU& gpu, const Triangle& polygon)
     }
 }
 
-void Renderer::push(const Rectangle& rectangle)
+void Renderer::push(const QuickRectangle& rectangle)
 {
     // Drop 24-bit colour to 16-bit, and set the mask bit to 0
     u8 r, g, b;
@@ -129,6 +129,18 @@ void Renderer::push(const Rectangle& rectangle)
     for (u16 y = 0; y < height; ++y)
         for (u16 x = 0; x < width; ++x)
             vram[(y + rectangle.y) * vram_width + x + rectangle.x] = colour;
+}
+
+void Renderer::push(const Rectangle& rectangle)
+{
+    // TODO
+    push(QuickRectangle {
+        .colour = rectangle.colour,
+        .x = (u16)(rectangle.vertex & 0xffff),
+        .y = (u16)(rectangle.vertex >> 16),
+        .width = rectangle.width,
+        .height = rectangle.height
+    });
 }
 
 i32 Renderer::get_cross_product_z(const Vertex& v0, const Vertex& v1, const Vertex& v2) const

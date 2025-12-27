@@ -92,7 +92,8 @@ private:
         AddressErrorLoad = 0x4,
         AddressErrorStore = 0x5,
         Syscall = 0x8,
-        ArithmeticOverflow = 0xc
+        Breakpoint = 0x9,
+        ArithmeticOverflow = 0xC
     };
     void raise_exception(const Exception exception);
 

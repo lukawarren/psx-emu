@@ -27,7 +27,8 @@ private:
         VRAMToCPU,
         CPUToVRAM,
         RenderPolygon,
-        QuickRectangleFill
+        QuickRectangleFill,
+        Rectangle
     };
     struct
     {
@@ -78,6 +79,26 @@ private:
         u16 width;
         u16 height;
     } gp0_quick_rectangle_fill;
+
+    struct Rectangle
+    {
+        enum class Size
+        {
+            Variable = 0b00,
+            SinglePixel = 0b01,
+            Sprite8x8 = 0b10,
+            Sprite16x16 = 0b11
+        };
+        Size size;
+        bool is_textured;
+        bool is_transparent;
+        bool use_raw_texture;
+        u32 colour;
+        u32 vertex;
+        u32 uv;
+        u16 width;
+        u16 height;
+    } gp0_rectangle;
 
     // GP0 0xE0 settings
     u8 texture_page_x_base;
