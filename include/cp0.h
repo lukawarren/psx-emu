@@ -3,34 +3,97 @@
 class CP0
 {
 public:
-    u32 sr; // Status register
+    u32 bpc; // Breakpoint program counter
+    u32 bda; // Breakpoint data address
+    u32 tar; // Target address
+    u32 dcic; // Debug and cache invalidate control
+    u32 bad_a; // Bad address
+    u32 bdam; // Breakpoint data address mask
+    u32 bpcm; // Breakpoint program counter mask
     u32 cause; // Cause of exception
     u32 epc; // Exception program counter
+
+    struct StatusRegister
+    {
+        bool boot_exception_vectors = true;
+        bool isolate_cache = false;
+        u8 interrupt_mask = 0;
+        bool kernel_mode = true;
+        bool interrupts_enabled = false;
+        bool kernel_mode_previous = true;
+        bool interrupts_enabled_previous = false;
+        bool kernel_mode_old = true;
+        bool interrupts_enabled_old = false;
+        bool cp0_enabled = true;
+        bool cp1_enabled = true;
+        bool cp2_enabled = true;
+        bool cp3_enabled = true;
+
+        u32 read() const
+        {
+            return ((u32)cp3_enabled << 31)
+                 | ((u32)cp2_enabled << 30)
+                 | ((u32)cp1_enabled << 29)
+                 | ((u32)cp0_enabled << 28)
+                 | ((u32)boot_exception_vectors << 22)
+                 | ((u32)isolate_cache << 16)
+                 | ((u32)interrupt_mask << 8)
+                 | ((u32)!kernel_mode_old << 5)
+                 | ((u32)interrupts_enabled_old << 4)
+                 | ((u32)!kernel_mode_previous << 3)
+                 | ((u32)interrupts_enabled_previous << 2)
+                 | ((u32)!kernel_mode << 1)
+                 | ((u32)interrupts_enabled);
+        }
+
+        void write(const u32 value)
+        {
+            cp3_enabled = ((value >> 31) & 0b1) != 0;
+            cp2_enabled = ((value >> 30) & 0b1) != 0;
+            cp1_enabled = ((value >> 28) & 0b1) != 0;
+            cp0_enabled = ((value >> 29) & 0b1) != 0;
+            boot_exception_vectors = ((value >> 22) & 0b1) != 0;
+            isolate_cache = ((value >> 16) & 0b1) != 0;
+            interrupt_mask = (u8)(value >> 8);
+            kernel_mode_old = ((value >> 5) & 0b1) == 0;
+            interrupts_enabled_old = ((value >> 4) & 0b1) != 0;;
+            kernel_mode_previous = ((value >> 3) & 0b1) == 0;
+            interrupts_enabled_previous = ((value >> 2) & 0b1) != 0;;
+            kernel_mode = ((value >> 1) & 0b1) == 0;;
+            interrupts_enabled = (value & 0b1) != 0;
+        }
+
+        void on_exception()
+        {
+            kernel_mode_old = kernel_mode_previous;
+            interrupts_enabled_old = interrupts_enabled_previous;
+            kernel_mode_previous = kernel_mode;
+            interrupts_enabled_previous = interrupts_enabled;
+            kernel_mode = true;
+            interrupts_enabled = false;
+        }
+    } sr;
 
     void write_register(const u32 reg, const u32 value)
     {
         switch (reg)
         {
-            case 3:
-            case 5:
+            // Read-only
             case 6:
-            case 7:
-            case 9:
-            case 11:
-                dbg("TODO: CP0 breakpoint registers");
-                break;
+            case 8:
+            case 13:
+            case 14:
+            case 15:
+            break;
 
-            case 12:
-                sr = value;
-                if (isolate_cache()) dbg("TODO: CP0 isolate cache bit set");
-                else dbg("CP0 isolate cache bit unset");
-                break;
+            case 3: bpc = value; break;
+            case 5: bda = value; break;
+            case 7: dcic = value; break;
+            case 9: bdam = value; break;
+            case 11: bpcm = value; break;
+            case 12: sr.write(value); break;
 
-            case 13: cause = value; break;
-            case 14: epc = value; break;
-
-            default:
-                dbg("TODO: unknown CP0 register", reg, value);
+            default: dbg("TODO: unknown CP0 register", reg, value);
         }
     }
 
@@ -38,9 +101,17 @@ public:
     {
         switch (reg)
         {
-            case 12: return sr;
+            case 3: return bpc;
+            case 5: return bda;
+            case 6: return tar;
+            case 7: return dcic;
+            case 8: return bad_a;
+            case 9: return bdam;
+            case 11: return bpcm;
+            case 12: return sr.read();
             case 13: return cause;
             case 14: return epc;
+            case 15: return 2; // Processor revision identifier
             default: dbg("TODO: unknown CP0 register", reg);
         }
 
@@ -54,9 +125,10 @@ public:
             case 0x10:
             {
                 // RFE (restore from exception)
-                const u32 mode = sr & 0x3f;
-                sr &= ~0x3fU;
-                sr |= mode >> 2;
+                sr.kernel_mode = sr.kernel_mode_previous;
+                sr.interrupts_enabled = sr.interrupts_enabled_previous;
+                sr.kernel_mode_previous = sr.kernel_mode_old;
+                sr.interrupts_enabled_previous = sr.interrupts_enabled_old;
                 break;
             }
 
@@ -65,7 +137,4 @@ public:
                 exit(1);
         }
     }
-
-    inline bool isolate_cache() { return (sr & (1 << 16)) != 0; }
-    inline bool boot_exception_vectors() const { return (sr & (1 << 22)) != 0; }
 };

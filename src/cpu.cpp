@@ -35,6 +35,7 @@ void CPU::execute()
     if ((pc & 0b11) != 0)
     {
         previous_pc = pc;
+        cp0.bad_a = pc;
         raise_exception(Exception::AddressErrorLoad);
         process_load_delay();
         return;
@@ -233,34 +234,29 @@ u32 CPU::read_u32(const u32 address)
 void CPU::write_u8(const u32 address, const u8 value)
 {
     // TODO
-    if (cp0.isolate_cache()) return;
+    if (cp0.sr.isolate_cache) return;
     bus.write_u8(address, value);
 }
 
 void CPU::write_u16(const u32 address, const u16 value)
 {
     // TODO
-    if (cp0.isolate_cache()) return;
+    if (cp0.sr.isolate_cache) return;
     bus.write_u16(address, value);
 }
 
 void CPU::write_u32(const u32 address, const u32 value)
 {
     // TODO
-    if (cp0.isolate_cache()) return;
+    if (cp0.sr.isolate_cache) return;
     bus.write_u32(address, value);
 }
 
 void CPU::raise_exception(const Exception exception)
 {
-    const u32 handler = cp0.boot_exception_vectors() ? 0xbfc00180 : 0x80000080;
-    if (exception != Exception::Syscall)
-        dbg("WARNING: Exception raised", dbg::hex((u32)exception));
-
-    // Shift bits [5:0] two places to the left
-    const u32 mode = cp0.sr & 0x3f;
-    cp0.sr &= ~0x3fU;
-    cp0.sr |= (mode << 2) & 0x3f;
+    u32 handler = cp0.sr.boot_exception_vectors ? 0xbfc00100 : 0x80000000;
+    if (exception == Exception::Breakpoint) handler += 0x40;
+    else handler += 0x80;
 
     // Update CAUSE register with exception code
     cp0.cause = (u32)exception << 2;
@@ -268,9 +264,14 @@ void CPU::raise_exception(const Exception exception)
     // Point EPC to the PC
     cp0.epc = previous_pc - (due_branch_delay ? 4 : 0);
 
-    // Set BD bit if were in a branch delay
-    if (due_branch_delay) cp0.cause |= (1U << 31);
-    else cp0.cause &= ~(1U << 31);
+    // Set BD bit if were in a branch delay, and update target address
+    if (due_branch_delay)
+    {
+        cp0.cause |= (1U << 31);
+        cp0.tar = next_pc;
+    }
+    else
+        cp0.cause &= ~(1U << 31);
 
     // No branch delay; jump straight there
     pc = handler;
@@ -440,6 +441,7 @@ void CPU::lh(const u32 instruction)
     const u32 address = get_address(instruction);
     if ((address & 1) != 0)
     {
+        cp0.bad_a = address;
         raise_exception(Exception::AddressErrorLoad);
         return;
     }
@@ -463,6 +465,7 @@ void CPU::lw(const u32 instruction)
     const u32 address = get_address(instruction);
     if ((address & 0b11) != 0)
     {
+        cp0.bad_a = address;
         raise_exception(Exception::AddressErrorLoad);
         return;
     }
@@ -480,6 +483,7 @@ void CPU::lhu(const u32 instruction)
     const u32 address = get_address(instruction);
     if ((address & 1) != 0)
     {
+        cp0.bad_a = address;
         raise_exception(Exception::AddressErrorLoad);
         return;
     }
@@ -508,6 +512,7 @@ void CPU::sh(const u32 instruction)
     const u32 address = get_address(instruction);
     if ((address & 1) != 0)
     {
+        cp0.bad_a = address;
         raise_exception(Exception::AddressErrorStore);
         return;
     }
@@ -530,6 +535,7 @@ void CPU::sw(const u32 instruction)
     const u32 address = get_address(instruction);
     if ((address & 0b11) != 0)
     {
+        cp0.bad_a = address;
         raise_exception(Exception::AddressErrorStore);
         return;
     }
@@ -650,6 +656,8 @@ void CPU::syscall(const u32 instruction)
 void CPU::_break(const u32 instruction)
 {
     (void)instruction;
+    cp0.dcic |= 1;
+    cp0.bpc = previous_pc;
     raise_exception(Exception::Breakpoint);
 }
 
