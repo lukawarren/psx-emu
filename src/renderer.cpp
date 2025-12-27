@@ -131,16 +131,69 @@ void Renderer::push(const QuickRectangle& rectangle)
             vram[(y + rectangle.y) * vram_width + x + rectangle.x] = colour;
 }
 
-void Renderer::push(const Rectangle& rectangle)
+void Renderer::push(const GPU& gpu, const Rectangle& rectangle)
 {
-    // TODO
-    push(QuickRectangle {
-        .colour = rectangle.colour,
-        .x = (u16)(rectangle.vertex & 0xffff),
-        .y = (u16)(rectangle.vertex >> 16),
-        .width = rectangle.width,
-        .height = rectangle.height
-    });
+    // TODO: masking too
+    if (rectangle.use_raw_texture || rectangle.is_transparent)
+        dbg("TODO: rectangle is transparent or uses raw texture");
+
+    const u16 x0 = (u16)(rectangle.vertex & 0xffff);
+    const u16 y0 = (u16)(rectangle.vertex >> 16);
+
+    if (rectangle.is_textured)
+    {
+        // Parse UV
+        const u32 colour_lookup_table = rectangle.uv >> 16;
+        const u32 u = rectangle.uv & 0xff;
+        const u32 v = (rectangle.uv >> 8) & 0xff;
+
+        // No need for CLUT if we're 15-bit
+        (void)colour_lookup_table;
+
+        // Get texture settings from GPU
+        const u32 texture_base_page_x = gpu.texture_page_x_base * 64;
+        const u32 texture_base_page_y = gpu.texture_page_y_base_1 * 256;
+        if (gpu.texture_page_colours != GPU::TexturePageColours::FifteenBit)
+        {
+            dbg("TODO: non-15-bit colour for rectangle");
+            exit(1);
+        }
+
+        for (u32 y = 0; y < rectangle.height; y++)
+        {
+            for (u32 x = 0; x < rectangle.width; x++)
+            {
+                u32 offset_x = x;
+                u32 offset_y = y;
+
+                // Texture flipping
+                if (gpu.textured_rectangle_x_flip) offset_x = rectangle.width - 1 - x;
+                if (gpu.textured_rectangle_y_flip) offset_y = rectangle.height - 1 - y;
+
+                // Max texture window is 256x256
+                offset_x %= 256;
+                offset_y %= 256;
+
+                const u32 tex_x = (texture_base_page_x + u + offset_x) % vram_width;
+                const u32 tex_y = (texture_base_page_y + v + offset_y) % vram_height;
+
+                // Sample texture from VRAM
+                const u16 texel = vram[tex_y * vram_width + tex_x];
+
+                // Write to destination
+                const u32 dst_x = x0 + x;
+                const u32 dst_y = y0 + y;
+                if (dst_x < vram_width && dst_y < vram_height)
+                    vram[dst_y * vram_width + dst_x] = texel;
+            }
+        }
+    }
+    else
+    {
+        for (u16 y = 0; y < rectangle.height; y++)
+            for (u16 x = 0; x < rectangle.width; x++)
+                vram[(y0 + y) * vram_width + x0 + x] = (u16)(rectangle.colour & 0xffff);
+    }
 }
 
 i32 Renderer::get_cross_product_z(const Vertex& v0, const Vertex& v1, const Vertex& v2) const

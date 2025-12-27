@@ -56,7 +56,7 @@ public:
     void blit(const u32 x, const u32 y, const u16 pixel);
     void push(const GPU& gpu, const Triangle& polygon);
     void push(const QuickRectangle& rectangle);
-    void push(const Rectangle& rectangle);
+    void push(const GPU& gpu, const Rectangle& rectangle);
 
     inline const u16* get_vram() const { return vram; }
 

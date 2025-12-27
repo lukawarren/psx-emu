@@ -18,10 +18,10 @@ u32 GPU::get_gpu_stat()
     u32 value = 0;
 
     // GP0 0xE1 settings
-    value |= u32(texture_page_x_base & 0b111) << 0;
+    value |= u32(texture_page_x_base & 0b1111) << 0;
     value |= u32(texture_page_y_base_1 & 0b1) << 4;
     value |= u32(semi_transparency & 0b11) << 5;
-    value |= u32(texture_page_colours & 0b11) << 7;
+    value |= u32((u32)texture_page_colours & 0b11) << 7;
     value |= u32(dither_24_bit_to_15_bit & 0b1) << 9;
     value |= u32(texture_page_y_base_2 & 0b1) << 15;
 
@@ -256,7 +256,7 @@ void GPU::send_gp0_command(const u32 opcode)
                     width = height = 16;
             }
 
-            renderer.push(Renderer::Rectangle {
+            renderer.push(*this, Renderer::Rectangle {
                 gp0_rectangle.is_textured,
                 gp0_rectangle.is_transparent,
                 gp0_rectangle.use_raw_texture,
@@ -276,10 +276,10 @@ void GPU::send_gp0_command(const u32 opcode)
     // Draw mode settings
     if (command == 0xE1)
     {
-        texture_page_x_base = ((opcode >> 0) & 0b111);
+        texture_page_x_base = ((opcode >> 0) & 0b1111);
         texture_page_y_base_1 = ((opcode >> 4) & 0b1);
         semi_transparency = ((opcode >> 5) & 0b11);
-        texture_page_colours = ((opcode >> 7) & 0b11);
+        texture_page_colours = (TexturePageColours)((opcode >> 7) & 0b11);
         dither_24_bit_to_15_bit = ((opcode >> 9) & 0b1);
         draw_to_display_area = ((opcode >> 10) & 0b1);
         texture_page_y_base_2 = ((opcode >> 11) & 0b1);
@@ -419,7 +419,7 @@ void GPU::send_gp1_command(const u32 opcode)
         texture_page_y_base_1 = 0;
         texture_page_y_base_2 = 0;
         semi_transparency = 0;
-        texture_page_colours = 0;
+        texture_page_colours = TexturePageColours::FourBit;
         dither_24_bit_to_15_bit = 0;
         draw_to_display_area = 1;
         textured_rectangle_x_flip = 0;

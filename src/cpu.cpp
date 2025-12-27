@@ -61,7 +61,10 @@ void CPU::execute()
     {
         did_sideload = true;
         // bus.sideload_exe("../tests/gpu/triangle/triangle.exe");
-        bus.sideload_exe("../tests/psxtest_cpu.exe");
+        // bus.sideload_exe("../tests/gpu/rectangles/rectangles.exe");
+        // bus.sideload_exe("../tests/gpu/texture-overflow/texture-overflow.exe");
+        bus.sideload_exe("../tests/gpu/texture-flip/texture-flip.exe");
+        // bus.sideload_exe("../tests/psxtest_cpu.exe");
     }
 #endif
 
