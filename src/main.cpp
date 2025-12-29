@@ -1,5 +1,7 @@
 #include "cpu.h"
 
+#define FULLSPEED 1
+
 int main()
 {
     if (!SDL_Init(SDL_INIT_VIDEO))
@@ -22,8 +24,10 @@ int main()
         exit(1);
     }
 
+#if FULLSPEED == 0
     if (!SDL_SetRenderVSync(renderer, SDL_RENDERER_VSYNC_ADAPTIVE))
         SDL_SetRenderVSync(renderer, 1);
+#endif
 
     SDL_Texture* texture = SDL_CreateTexture(
         renderer,
@@ -42,8 +46,10 @@ int main()
     bool running = true;
     SDL_Event event;
 
+#if FULLSPEED == 0
     const u64 target_frame_time = 1000000000 / 60;
     const u64 frequency = SDL_GetPerformanceFrequency();
+#endif
 
     while (running)
     {
@@ -51,7 +57,9 @@ int main()
             if (event.type == SDL_EVENT_QUIT)
                 running = false;
 
+#if FULLSPEED == 0
         const u64 frame_start = SDL_GetPerformanceCounter();
+#endif
 
         // Assume each instruction takes about 2 cycles
         for (u32 i = 0; i < CPU::frequency / 60 / 2; i++)
@@ -74,10 +82,12 @@ int main()
         SDL_RenderTexture(renderer, texture, nullptr, nullptr);
         SDL_RenderPresent(renderer);
 
+#if FULLSPEED == 0
         const u64 frame_time = SDL_GetPerformanceCounter() - frame_start;
         const u64 nanoseconds = (u64)((double)frame_time * 1e9 / (double)frequency);
         if (nanoseconds < target_frame_time)
             SDL_DelayNS(target_frame_time - nanoseconds);
+#endif
     }
 
     SDL_DestroyTexture(texture);

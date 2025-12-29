@@ -20,7 +20,7 @@ u32 GPU::get_gpu_stat()
     // GP0 0xE1 settings
     value |= u32(texture_page_x_base & 0b1111) << 0;
     value |= u32(texture_page_y_base_1 & 0b1) << 4;
-    value |= u32(semi_transparency & 0b11) << 5;
+    value |= u32(semi_transparency_mode & 0b11) << 5;
     value |= u32((u32)texture_page_colours & 0b11) << 7;
     value |= u32(dither_24_bit_to_15_bit & 0b1) << 9;
     value |= u32(texture_page_y_base_2 & 0b1) << 15;
@@ -87,6 +87,7 @@ void GPU::send_gp0_command(const u32 opcode)
                 const u16 x = (u16)(gp0_cpu_to_vram.blit_count % (u32)gp0_cpu_to_vram.width);
                 const u16 y = (u16)(gp0_cpu_to_vram.blit_count / (u32)gp0_cpu_to_vram.width);
                 renderer.blit(
+                    *this,
                     gp0_cpu_to_vram.destination_x + x,
                     gp0_cpu_to_vram.destination_y + y,
                     (u16)(i == 0 ? (opcode & 0xFFFF) : (opcode >> 16))
@@ -278,7 +279,7 @@ void GPU::send_gp0_command(const u32 opcode)
     {
         texture_page_x_base = ((opcode >> 0) & 0b1111);
         texture_page_y_base_1 = ((opcode >> 4) & 0b1);
-        semi_transparency = ((opcode >> 5) & 0b11);
+        semi_transparency_mode = ((opcode >> 5) & 0b11);
         texture_page_colours = (TexturePageColours)((opcode >> 7) & 0b11);
         dither_24_bit_to_15_bit = ((opcode >> 9) & 0b1);
         draw_to_display_area = ((opcode >> 10) & 0b1);
@@ -418,7 +419,7 @@ void GPU::send_gp1_command(const u32 opcode)
         texture_page_x_base = 0;
         texture_page_y_base_1 = 0;
         texture_page_y_base_2 = 0;
-        semi_transparency = 0;
+        semi_transparency_mode = 0;
         texture_page_colours = TexturePageColours::FourBit;
         dither_24_bit_to_15_bit = 0;
         draw_to_display_area = 1;
@@ -557,38 +558,47 @@ void GPU::dma_send(const u32 data)
 
 void GPU::push_quad()
 {
+    const u16 clut = (u16)(gp0_render_polygon.uvs[0] >> 16);
+    const u16 texture_page = (u16)(gp0_render_polygon.uvs[1] >> 16);
+
     // First triangle
     renderer.push(*this, {
-        gp0_render_polygon.gouraud_shading,
         gp0_render_polygon.is_textured,
         gp0_render_polygon.is_transparent,
         gp0_render_polygon.use_raw_texture,
         gp0_render_polygon.colours,
         gp0_render_polygon.vertices,
-        gp0_render_polygon.uvs
+        gp0_render_polygon.uvs,
+        clut,
+        texture_page
     });
 
     // Second triangle
     renderer.push(*this, {
-        gp0_render_polygon.gouraud_shading,
         gp0_render_polygon.is_textured,
         gp0_render_polygon.is_transparent,
         gp0_render_polygon.use_raw_texture,
         gp0_render_polygon.colours + 1,
         gp0_render_polygon.vertices + 1,
-        gp0_render_polygon.uvs + 1
+        gp0_render_polygon.uvs + 1,
+        clut,
+        texture_page
     });
 }
 
 void GPU::push_triangle()
 {
+    const u16 clut = (u16)(gp0_render_polygon.uvs[0] >> 16);
+    const u16 texture_page = (u16)(gp0_render_polygon.uvs[1] >> 16);
+
     renderer.push(*this, {
-        gp0_render_polygon.gouraud_shading,
         gp0_render_polygon.is_textured,
         gp0_render_polygon.is_transparent,
         gp0_render_polygon.use_raw_texture,
         gp0_render_polygon.colours,
         gp0_render_polygon.vertices,
-        gp0_render_polygon.uvs
+        gp0_render_polygon.uvs,
+        clut,
+        texture_page
     });
 }

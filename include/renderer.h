@@ -7,24 +7,26 @@ class Renderer
 public:
     struct Triangle
     {
-        bool gouraud_shading;
         bool is_textured;
         bool is_transparent;
         bool use_raw_texture;
         u32 colours[3];
         u32 vertices[3];
         u32 uvs[3];
+        u16 clut;
+        u16 texture_page;
 
         Triangle(
-            const bool gouraud_shading,
             const bool is_textured,
             const bool is_transparent,
             const bool use_raw_texture,
             const u32* colours,
             const u32* vertices,
-            const u32* uvs
-        ) : gouraud_shading(gouraud_shading), is_textured(is_textured),
-            is_transparent(is_transparent), use_raw_texture(use_raw_texture)
+            const u32* uvs,
+            const u16 clut,
+            const u16 texture_page
+        ) : is_textured(is_textured), is_transparent(is_transparent),
+            use_raw_texture(use_raw_texture), clut(clut), texture_page(texture_page)
         {
             memcpy(this->colours, colours, sizeof(u32) * 3);
             memcpy(this->vertices, vertices, sizeof(u32) * 3);
@@ -53,7 +55,7 @@ public:
         u16 height;
     } gp0_rectangle;
 
-    void blit(const u32 x, const u32 y, const u16 pixel);
+    void blit(const GPU& gpu, const u32 x, const u32 y, const u16 pixel);
     void push(const GPU& gpu, const Triangle& polygon);
     void push(const QuickRectangle& rectangle);
     void push(const GPU& gpu, const Rectangle& rectangle);
@@ -69,6 +71,8 @@ private:
         u8 r = 0;
         u8 g = 0;
         u8 b = 0;
+        u8 u = 0;
+        u8 v = 0;
     };
 
     static inline void unpack_vertex(const u32 vertex, i32& x, i32& y)
@@ -101,9 +105,24 @@ private:
                 (u16)(r >> 3);
     }
 
+    static inline void unpack_uv(const u32 uv, u8& u, u8& v)
+    {
+        u = (u8)(uv & 0xFF);
+        v = (u8)((uv >> 8) & 0xFF);
+    }
+
+    static inline bool is_mask_bit_set(const u16 pixel)
+    {
+        return ((pixel >> 15) != 0);
+    }
+
     i32 get_cross_product_z(const Vertex& v0, const Vertex& v1, const Vertex& v2) const;
     void ensure_clockwise_vertex_ordering(Vertex& v0, Vertex& v1, Vertex& v2) const;
     bool is_inside_triangle(const i32 x, const i32 y, const Vertex& v0, const Vertex& v1, const Vertex& v2) const;
+
+    void write_with_masking(u16* original, const u16 pixel, const GPU& gpu) const;
+    void write_with_masking(u16* original, const u8 r, const u8 g, const u8 b, const bool mask, const GPU& gpu) const;
+    void write_with_transparency_and_masking(u16* original, const u8 r, const u8 g, const u8 b, const bool mask, const GPU& gpu) const;
 
     // Laid out as 512 lines of 2048 bytes each
     // i.e 1024x512 16-bit pixels

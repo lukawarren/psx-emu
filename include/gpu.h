@@ -104,7 +104,7 @@ private:
     u8 texture_page_x_base;
     u8 texture_page_y_base_1;
     u8 texture_page_y_base_2;
-    u8 semi_transparency;
+    u8 semi_transparency_mode;
     enum class TexturePageColours
     {
         FourBit,
