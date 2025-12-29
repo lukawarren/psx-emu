@@ -57,9 +57,15 @@ void Renderer::push(const GPU& gpu, const Triangle& polygon)
     i32 w2_row = get_cross_product_z(v[0], v[1], p);
 
     // Precompute for tie-breaking
-    const bool is_top_left01 = (A01 < 0) || (A01 == 0 && B01 > 0);
-    const bool is_top_left12 = (A12 < 0) || (A12 == 0 && B12 > 0);
-    const bool is_top_left20 = (A20 < 0) || (A20 == 0 && B20 > 0);
+    const auto is_top_left = [](const Vertex& v0, const Vertex& v1)
+    {
+        const int dx = v1.x - v0.x;
+        const int dy = v1.y - v0.y;
+        return (dy < 0) || (dy == 0 && dx > 0);
+    };
+    const bool is_top_left01 = is_top_left(v[0], v[1]);
+    const bool is_top_left12 = is_top_left(v[1], v[2]);
+    const bool is_top_left20 = is_top_left(v[2], v[0]);
 
     // Precompute denominator for barycentric coords
     const i32 denom = get_cross_product_z(v[0], v[1], v[2]);
@@ -197,7 +203,10 @@ void Renderer::push(const GPU& gpu, const Triangle& polygon)
                     const u8 r = (u8)(w0 * dr0 + w1 * dr1 + w2 * dr2);
                     const u8 g = (u8)(w0 * dg0 + w1 * dg1 + w2 * dg2);
                     const u8 b = (u8)(w0 * db0 + w1 * db1 + w2 * db2);
-                    write_with_masking(pixel_ptr, r, g, b, false, gpu);
+                    if (polygon.is_transparent)
+                        write_with_transparency_and_masking(pixel_ptr, r, g, b, false, gpu);
+                    else
+                        write_with_masking(pixel_ptr, r, g, b, false, gpu);
                 }
             }
 
