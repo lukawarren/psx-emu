@@ -2,8 +2,8 @@
 #include "trace.h"
 
 #define ENABLE_TRACE 0
-#define ENABLE_SERIAL 0
-#define SIDELOAD_EXE 0
+#define ENABLE_SERIAL 1
+#define SIDELOAD_EXE 1
 
 CPU::CPU() : bus(*this, "../SCPH1001.bin")
 {
@@ -47,6 +47,7 @@ void CPU::clock()
         did_sideload = true;
         // bus.sideload_exe("../tests/gpu/triangle/triangle.exe");
         // bus.sideload_exe("../tests/gpu/rectangles/rectangles.exe");
+        bus.sideload_exe("../tests/gpu/quad/quad.exe");
         // bus.sideload_exe("../tests/gpu/texture-overflow/texture-overflow.exe");
         // bus.sideload_exe("../tests/gpu/texture-flip/texture-flip.exe");
         // bus.sideload_exe("../tests/psxtest_cpu.exe");
@@ -65,6 +66,7 @@ void CPU::clock()
         }
         raise_exception(Exception::Interrupt);
         process_load_delay();
+        return;
     }
 
     // Get next program counter
