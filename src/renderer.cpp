@@ -107,6 +107,7 @@ void Renderer::push(const GPU& gpu, const Triangle& polygon)
                 if (polygon.is_textured)
                 {
                     // Max texture size is 256 so u8 will wrap for us
+                    // TODO: texture flip x and y
                     u8 u = (u8)std::round(w0 * du0 + w1 * du1 + w2 * du2);
                     u8 v = (u8)std::round(w0 * dv0 + w1 * dv1 + w2 * dv2);
 
@@ -179,10 +180,10 @@ void Renderer::push(const GPU& gpu, const Triangle& polygon)
                         }
                         else
                         {
-                            // Colour blending
-                            const u8 r = (u8)(((u32)std::round(w0 * dr0 + w1 * dr1 + w2 * dr2) * texel_r) >> 7);
-                            const u8 g = (u8)(((u32)std::round(w0 * dg0 + w1 * dg1 + w2 * dg2) * texel_g) >> 7);
-                            const u8 b = (u8)(((u32)std::round(w0 * db0 + w1 * db1 + w2 * db2) * texel_b) >> 7);
+                            // Colour blending (modulation)
+                            const u8 r = (u8)(((u32)(w0 * dr0 + w1 * dr1 + w2 * dr2) * texel_r) >> 7);
+                            const u8 g = (u8)(((u32)(w0 * dg0 + w1 * dg1 + w2 * dg2) * texel_g) >> 7);
+                            const u8 b = (u8)(((u32)(w0 * db0 + w1 * db1 + w2 * db2) * texel_b) >> 7);
 
                             if (gpu.texture_page_colours != GPU::TexturePageColours::FifteenBit && is_transparent)
                                 write_with_transparency_and_masking(pixel_ptr, r, g, b, texel_mask, gpu);
@@ -193,9 +194,9 @@ void Renderer::push(const GPU& gpu, const Triangle& polygon)
                 }
                 else
                 {
-                    const u8 r = (u8)std::round(w0 * dr0 + w1 * dr1 + w2 * dr2);
-                    const u8 g = (u8)std::round(w0 * dg0 + w1 * dg1 + w2 * dg2);
-                    const u8 b = (u8)std::round(w0 * db0 + w1 * db1 + w2 * db2);
+                    const u8 r = (u8)(w0 * dr0 + w1 * dr1 + w2 * dr2);
+                    const u8 g = (u8)(w0 * dg0 + w1 * dg1 + w2 * dg2);
+                    const u8 b = (u8)(w0 * db0 + w1 * db1 + w2 * db2);
                     write_with_masking(pixel_ptr, r, g, b, false, gpu);
                 }
             }
@@ -238,9 +239,6 @@ void Renderer::push(const QuickRectangle& rectangle)
 
 void Renderer::push(const GPU& gpu, const Rectangle& rectangle)
 {
-    if (rectangle.use_raw_texture || rectangle.is_transparent)
-        dbg("TODO: rectangle is transparent or uses raw texture");
-
     const u16 x0 = (u16)(rectangle.vertex & 0xffff);
     const u16 y0 = (u16)(rectangle.vertex >> 16);
 
@@ -286,7 +284,20 @@ void Renderer::push(const GPU& gpu, const Rectangle& rectangle)
                 const u32 dst_x = x0 + x;
                 const u32 dst_y = y0 + y;
                 if (dst_x < vram_width && dst_y < vram_height)
-                    write_with_masking(&vram[dst_y * vram_width + dst_x], texel, gpu);
+                {
+                    u16* pixel = &vram[dst_y * vram_width + dst_x];
+
+                    if (rectangle.is_transparent && gpu.semi_transparency_mode)
+                    {
+                        const u8 r = ((u8)(texel >> 0) & 0b11111) << 3;
+                        const u8 g = ((u8)(texel >> 5) & 0b11111) << 3;
+                        const u8 b = ((u8)(texel >> 10) & 0b11111) << 3;
+                        const bool mask = (texel >> 15) != 0;
+                        write_with_transparency_and_masking(pixel, r, g, b, mask, gpu);
+                    }
+                    else
+                        write_with_masking(pixel, texel, gpu);
+                }
             }
         }
     }
@@ -297,8 +308,17 @@ void Renderer::push(const GPU& gpu, const Rectangle& rectangle)
         const u16 colour = pack_colour(r, g, b, false);
 
         for (u16 y = 0; y < rectangle.height; y++)
+        {
             for (u16 x = 0; x < rectangle.width; x++)
-                write_with_masking(&vram[(y0 + y) * vram_width + x0 + x], colour, gpu);
+            {
+                u16* pixel = &vram[(y0 + y) * vram_width + x0 + x];
+
+                if (rectangle.is_transparent && gpu.semi_transparency_mode)
+                    write_with_transparency_and_masking(pixel, r, g, b, false, gpu);
+                else
+                    write_with_masking(pixel, colour, gpu);
+            }
+        }
     }
 }
 
@@ -349,25 +369,19 @@ bool Renderer::is_inside_triangle(const i32 x, const i32 y, const Vertex& v0, co
 
 void Renderer::write_with_masking(u16* original, const u16 pixel, const GPU& gpu) const
 {
-    if (gpu.check_mask_before_draw)
-    {
-        if (is_mask_bit_set(*original))
-            return;
-    }
+    if (gpu.check_mask_before_draw && is_mask_bit_set(*original))
+        return;
 
     if (gpu.set_mask_while_drawing)
-        *original = pixel | 0b1000000000000000;
+        *original = pixel | (1 << 15);
     else
         *original = pixel;
 }
 
 void Renderer::write_with_masking(u16* original, const u8 r, const u8 g, const u8 b, const bool mask, const GPU& gpu) const
 {
-    if (gpu.check_mask_before_draw)
-    {
-        if (is_mask_bit_set(*original))
-            return;
-    }
+    if (gpu.check_mask_before_draw && is_mask_bit_set(*original))
+        return;
 
     if (gpu.set_mask_while_drawing)
         *original = pack_colour(r, g, b, true);
@@ -383,6 +397,9 @@ void Renderer::write_with_transparency_and_masking(u16* original, const u8 r, co
     old_g = (u8)(((*original >> 5) & 0b11111) << 3);
     old_b = (u8)(((*original >> 10) & 0b11111) << 3);
     old_mask = (*original >> 15) != 0;
+
+    if (gpu.check_mask_before_draw && old_mask)
+        return;
 
     u8 new_r, new_g, new_b;
     switch (gpu.semi_transparency_mode)
@@ -412,14 +429,8 @@ void Renderer::write_with_transparency_and_masking(u16* original, const u8 r, co
         break;
     }
 
-    if (gpu.check_mask_before_draw)
-    {
-        if (old_mask)
-            return;
-    }
-
     if (gpu.set_mask_while_drawing)
-        *original = pack_colour(r, g, b, true);
+        *original = pack_colour(new_r, new_g, new_b, true);
     else
         *original = pack_colour(new_r, new_g, new_b, mask);
 }
