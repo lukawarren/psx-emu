@@ -1,6 +1,7 @@
 #pragma once
 #include "bus.h"
 #include "cp0.h"
+#include "gte.h"
 
 class CPU
 {
@@ -48,6 +49,7 @@ private:
     u32 hi;
     u32 lo;
     CP0 cp0;
+    GTE gte;
 
     void execute(const u32 instruction);
     void process_load_delay();
@@ -149,14 +151,8 @@ private:
     void swl    (const u32 instruction);
     void sw     (const u32 instruction);
     void swr    (const u32 instruction);
-    void lwc0   (const u32 instruction);
-    void lwc1   (const u32 instruction);
-    void lwc2   (const u32 instruction);
-    void lwc3   (const u32 instruction);
-    void swc0   (const u32 instruction);
-    void swc1   (const u32 instruction);
-    void swc2   (const u32 instruction);
-    void swc3   (const u32 instruction);
+    void lwcz   (const u32 instruction);
+    void swcz   (const u32 instruction);
     void sll    (const u32 instruction);
     void srl    (const u32 instruction);
     void sra    (const u32 instruction);

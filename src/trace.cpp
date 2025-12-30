@@ -118,14 +118,14 @@ void trace(u32 instruction)
         case 0x2a: printf("swl %s, 0x%x(%s)\n", reg_name((instruction >> 16) & 0x1F), instruction & 0xFFFF, reg_name((instruction >> 21) & 0x1F)); break;
         case 0x2b: printf("sw %s, 0x%x(%s)\n", reg_name((instruction >> 16) & 0x1F), instruction & 0xFFFF, reg_name((instruction >> 21) & 0x1F)); break;
         case 0x2e: printf("swr %s, 0x%x(%s)\n", reg_name((instruction >> 16) & 0x1F), instruction & 0xFFFF, reg_name((instruction >> 21) & 0x1F)); break;
-        case 0x30: printf("lwc0 %s, 0x%x(%s)\n", reg_name((instruction >> 16) & 0x1F), instruction & 0xFFFF, reg_name((instruction >> 21) & 0x1F)); break;
-        case 0x31: printf("lwc1 %s, 0x%x(%s)\n", reg_name((instruction >> 16) & 0x1F), instruction & 0xFFFF, reg_name((instruction >> 21) & 0x1F)); break;
-        case 0x32: printf("lwc2 %s, 0x%x(%s)\n", reg_name((instruction >> 16) & 0x1F), instruction & 0xFFFF, reg_name((instruction >> 21) & 0x1F)); break;
-        case 0x33: printf("lwc3 %s, 0x%x(%s)\n", reg_name((instruction >> 16) & 0x1F), instruction & 0xFFFF, reg_name((instruction >> 21) & 0x1F)); break;
-        case 0x38: printf("swc0 %s, 0x%x(%s)\n", reg_name((instruction >> 16) & 0x1F), instruction & 0xFFFF, reg_name((instruction >> 21) & 0x1F)); break;
-        case 0x39: printf("swc1 %s, 0x%x(%s)\n", reg_name((instruction >> 16) & 0x1F), instruction & 0xFFFF, reg_name((instruction >> 21) & 0x1F)); break;
-        case 0x3a: printf("swc2 %s, 0x%x(%s)\n", reg_name((instruction >> 16) & 0x1F), instruction & 0xFFFF, reg_name((instruction >> 21) & 0x1F)); break;
-        case 0x3b: printf("swc3 %s, 0x%x(%s)\n", reg_name((instruction >> 16) & 0x1F), instruction & 0xFFFF, reg_name((instruction >> 21) & 0x1F)); break;
+        case 0x30:
+        case 0x31:
+        case 0x32:
+        case 0x33: printf("lwcz %s, 0x%x(%s)\n", reg_name((instruction >> 16) & 0x1F), instruction & 0xFFFF, reg_name((instruction >> 21) & 0x1F)); break;
+        case 0x38:
+        case 0x39:
+        case 0x3a:
+        case 0x3b: printf("swcz %s, 0x%x(%s)\n", reg_name((instruction >> 16) & 0x1F), instruction & 0xFFFF, reg_name((instruction >> 21) & 0x1F)); break;
 
         default: printf("UNKNOWN_OPCODE 0x%x\n", opcode); break;
     }

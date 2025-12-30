@@ -10,6 +10,10 @@ CPU::CPU() : bus(*this, "../SCPH1001.bin")
     pc = 0xBFC00000;
     next_pc = pc + 4;
     registers[0] = 0;
+
+    dbg("TODO: Using CFC2/MFC2 has a delay of 1 instruction until the GPR is loaded with its new value");
+    dbg("TODO: If an instruction that reads a GTE register or a GTE command is executed before the current GTE command is finished, the CPU will hold until the instruction has finished.");
+    dbg("TODO: cycles, including for R/W memory, MUL, DIV and GTE");
 }
 
 void CPU::clock()
@@ -47,9 +51,10 @@ void CPU::clock()
         did_sideload = true;
         // bus.sideload_exe("../tests/gpu/triangle/triangle.exe");
         // bus.sideload_exe("../tests/gpu/rectangles/rectangles.exe");
-        bus.sideload_exe("../tests/gpu/quad/quad.exe");
+        // bus.sideload_exe("../tests/gpu/quad/quad.exe");
         // bus.sideload_exe("../tests/gpu/texture-overflow/texture-overflow.exe");
         // bus.sideload_exe("../tests/gpu/texture-flip/texture-flip.exe");
+        bus.sideload_exe("../tests/gpu/animated-triangle/animated-triangle.exe");
         // bus.sideload_exe("../tests/psxtest_cpu.exe");
     }
 #endif
@@ -58,12 +63,10 @@ void CPU::clock()
     cp0.set_interrupt_due(bus.interrupt_pending());
     if (cp0.interrupt_pending())
     {
-        // TODO: execute GTE command regardless
+        // Always execute GTE command regardless (as required)
         if ((instruction & 0xFE000000) == 0x4A000000)
-        {
-            dbg("TODO");
-            exit(1);
-        }
+            execute(instruction);
+
         raise_exception(Exception::Interrupt);
         process_load_delay();
         return;
@@ -182,14 +185,14 @@ void CPU::execute(const u32 instruction)
         case 0x2a: swl(instruction);    break;
         case 0x2b: sw(instruction);     break;
         case 0x2e: swr(instruction);    break;
-        case 0x30: lwc0(instruction);   break;
-        case 0x31: lwc1(instruction);   break;
-        case 0x32: lwc2(instruction);   break;
-        case 0x33: lwc3(instruction);   break;
-        case 0x38: swc0(instruction);   break;
-        case 0x39: swc1(instruction);   break;
-        case 0x3a: swc2(instruction);   break;
-        case 0x3b: swc3(instruction);   break;
+        case 0x30:
+        case 0x31:
+        case 0x32:
+        case 0x33: lwcz(instruction);   break;
+        case 0x38:
+        case 0x39:
+        case 0x3a:
+        case 0x3b: swcz(instruction);   break;
         default:
             dbg("TODO: reserved instruction exception (2)", dbg::hex(instruction >> 26));
             exit(1);
@@ -414,6 +417,7 @@ void CPU::mfcz(const u32 instruction)
     switch (get_coprocessor(instruction))
     {
         case 0: value = cp0.read_register(reg); break;
+        case 2: value = gte.read_data_register(reg); break;
         default: dbg("TODO: unknown co-processor"); exit(1); break;
     }
 
@@ -422,9 +426,14 @@ void CPU::mfcz(const u32 instruction)
 
 void CPU::cfcz(const u32 instruction)
 {
-    dbg("todo");
-    exit(1);
-    (void)instruction;
+    u32 value;
+    switch (get_coprocessor(instruction))
+    {
+        case 2: value = gte.read_control_register(get_rd(instruction)); break;
+        default: dbg("TODO: unknown co-processor"); exit(1); return;
+    }
+
+    write_register_delayed(get_rt(instruction), value);
 }
 
 void CPU::mtcz(const u32 instruction)
@@ -435,15 +444,18 @@ void CPU::mtcz(const u32 instruction)
     switch (get_coprocessor(instruction))
     {
         case 0: cp0.write_register(reg, value); break;
+        case 2: gte.write_data_register(reg, value); break;
         default: dbg("TODO: unknown co-processor"); exit(1); break;
     }
 }
 
 void CPU::ctcz(const u32 instruction)
 {
-    dbg("todo");
-    exit(1);
-    (void)instruction;
+    switch (get_coprocessor(instruction))
+    {
+        case 2: gte.write_control_register(get_rd(instruction), registers[get_rt(instruction)]); break;
+        default: dbg("TODO: unknown co-processor"); exit(1); break;
+    }
 }
 
 void CPU::copz(const u32 instruction)
@@ -451,6 +463,7 @@ void CPU::copz(const u32 instruction)
     switch (get_coprocessor(instruction))
     {
         case 0: cp0.execute(instruction & 0xffffff); break;
+        case 2: gte.execute(instruction & 0xffffff); break;
         default: dbg("TODO: unknown co-processor"); exit(1); break;
     }
 }
@@ -577,52 +590,44 @@ void CPU::swr(const u32 instruction)
     write_u32(address & (~0b11U), (existing & (~mask)) | (reg << shift));
 }
 
-void CPU::lwc0(const u32 instruction)
+void CPU::lwcz(const u32 instruction)
 {
-    dbg("todo");
-    exit(1);(void)instruction;
+    if (get_coprocessor(instruction) != 2)
+        dbg("TODO: coprocessor exception?");
+
+    const u32 base_address = registers[get_rs(instruction)];
+    const u32 address = base_address + (u32)get_signed_immediate(instruction);
+
+    if ((address & 0b11) != 0)
+    {
+        cp0.bad_a = address;
+        raise_exception(Exception::AddressErrorLoad);
+        return;
+    }
+
+    const u32 value = bus.read_u32(address);
+    gte.write_control_register(get_rt(instruction), value);
 }
 
-void CPU::lwc1(const u32 instruction)
+void CPU::swcz(const u32 instruction)
 {
-    dbg("todo");
-    exit(1);(void)instruction;
-}
+    if (get_coprocessor(instruction) != 2)
+        dbg("TODO: coprocessor exception?");
 
-void CPU::lwc2(const u32 instruction)
-{
-    dbg("todo");
-    exit(1);(void)instruction;
-}
+    const u32 base_address = registers[get_rs(instruction)];
+    const u32 address = base_address + (u32)get_signed_immediate(instruction);
 
-void CPU::lwc3(const u32 instruction)
-{
-    dbg("todo");
-    exit(1);(void)instruction;
-}
+    if ((address & 0b11) != 0)
+    {
+        cp0.bad_a = address;
+        raise_exception(Exception::AddressErrorLoad);
+        return;
+    }
 
-void CPU::swc0(const u32 instruction)
-{
-    dbg("todo");
-    exit(1);(void)instruction;
-}
-
-void CPU::swc1(const u32 instruction)
-{
-    dbg("todo");
-    exit(1);(void)instruction;
-}
-
-void CPU::swc2(const u32 instruction)
-{
-    dbg("todo");
-    exit(1);(void)instruction;
-}
-
-void CPU::swc3(const u32 instruction)
-{
-    dbg("todo");
-    exit(1);(void)instruction;
+    bus.write_u32(
+        address,
+        gte.read_control_register(get_rt(instruction))
+    );
 }
 
 void CPU::sll(const u32 instruction)

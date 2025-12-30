@@ -74,8 +74,9 @@ src_files = files(
   'src/cpu.cpp',
   'src/bus.cpp',
   'src/gpu.cpp',
+  'src/gte.cpp',
   'src/trace.cpp',
-  'src/renderer.cpp',
+  'src/renderer.cpp'
 )
 
 # Executable
