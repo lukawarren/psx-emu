@@ -417,7 +417,7 @@ void CPU::mfcz(const u32 instruction)
     switch (get_coprocessor(instruction))
     {
         case 0: value = cp0.read_register(reg); break;
-        case 2: value = gte.read_data_register(reg); break;
+        case 2: value = gte.read_register(reg); break;
         default: dbg("TODO: unknown co-processor"); exit(1); break;
     }
 
@@ -429,7 +429,7 @@ void CPU::cfcz(const u32 instruction)
     u32 value;
     switch (get_coprocessor(instruction))
     {
-        case 2: value = gte.read_control_register(get_rd(instruction)); break;
+        case 2: value = gte.read_register(get_rd(instruction) + 32); break;
         default: dbg("TODO: unknown co-processor"); exit(1); return;
     }
 
@@ -444,7 +444,7 @@ void CPU::mtcz(const u32 instruction)
     switch (get_coprocessor(instruction))
     {
         case 0: cp0.write_register(reg, value); break;
-        case 2: gte.write_data_register(reg, value); break;
+        case 2: gte.write_register(reg, value); break;
         default: dbg("TODO: unknown co-processor"); exit(1); break;
     }
 }
@@ -453,7 +453,7 @@ void CPU::ctcz(const u32 instruction)
 {
     switch (get_coprocessor(instruction))
     {
-        case 2: gte.write_control_register(get_rd(instruction), registers[get_rt(instruction)]); break;
+        case 2: gte.write_register(get_rd(instruction) + 32, registers[get_rt(instruction)]); break;
         default: dbg("TODO: unknown co-processor"); exit(1); break;
     }
 }
@@ -606,7 +606,7 @@ void CPU::lwcz(const u32 instruction)
     }
 
     const u32 value = bus.read_u32(address);
-    gte.write_control_register(get_rt(instruction), value);
+    gte.write_register(get_rt(instruction), value);
 }
 
 void CPU::swcz(const u32 instruction)
@@ -624,9 +624,10 @@ void CPU::swcz(const u32 instruction)
         return;
     }
 
+    const auto rt = get_rt(instruction);
     bus.write_u32(
         address,
-        gte.read_control_register(get_rt(instruction))
+        gte.read_register(get_rt(instruction))
     );
 }
 

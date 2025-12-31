@@ -15,6 +15,7 @@
 #include <vector>
 #include <array>
 #include <cmath>
+#include <bit>
 
 #include <SDL3/SDL.h>
 #include <SDL3/SDL_main.h>
