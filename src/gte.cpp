@@ -438,8 +438,34 @@ CycleCount GTE::rtps(const u32 instruction)
     return 15;
 }
 
-CycleCount GTE::nclip(const u32 instruction) { dbg("TODO", dbg::hex(instruction & 0b111111)); exit(1); return 0; }
-CycleCount GTE::op(const u32 instruction) { dbg("TODO", dbg::hex(instruction & 0b111111)); exit(1); return 0; }
+// Normal Clip
+CycleCount GTE::nclip(const u32 instruction)
+{
+    (void)instruction;
+    set_mac0(
+        (i64)sx[0] * (i64)sy[1] +
+        (i64)sx[1] * (i64)sy[2] +
+        (i64)sx[2] * (i64)sy[0] -
+        (i64)sx[0] * (i64)sy[2] -
+        (i64)sx[1] * (i64)sy[0] -
+        (i64)sx[2] * (i64)sy[1]
+    );
+    return 8;
+}
+
+CycleCount GTE::op(const u32 instruction)
+{
+    const bool sf = get_shift_fraction(instruction);
+    const bool lm = get_limit(instruction);
+    set_mac<1>(ir3 * rt[1][1] - ir2 * rt[2][2], sf);
+    set_mac<2>(ir1 * rt[2][2] - ir3 * rt[0][0], sf);
+    set_mac<3>(ir2 * rt[0][0] - ir1 * rt[1][1], sf);
+    set_ir<1>(mac1, lm);
+    set_ir<2>(mac2, lm);
+    set_ir<3>(mac3, lm);
+    return 6;
+}
+
 CycleCount GTE::dpcs(const u32 instruction) { dbg("TODO", dbg::hex(instruction & 0b111111)); exit(1); return 0; }
 CycleCount GTE::intpl(const u32 instruction) { dbg("TODO", dbg::hex(instruction & 0b111111)); exit(1); return 0; }
 
