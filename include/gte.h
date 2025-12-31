@@ -40,11 +40,11 @@ private:
     u32 gbk;            // Background colour (r, g, b)
     u32 bbk;            // Background colour (r, g, b)
     i16 lc[3][3];       // Light colour matrix
-    u32 rfc;            // Far colour (r, g, b)
-    u32 gfc;            // Far colour (r, g, b)
-    u32 bfc;            // Far colour (r, g, b)
-    u32 ofx;            // Screen offset (x, y)
-    u32 ofy;            // Screen offset (x, y)
+    i32 rfc;            // Far colour (r, g, b)
+    i32 gfc;            // Far colour (r, g, b)
+    i32 bfc;            // Far colour (r, g, b)
+    i32 ofx;            // Screen offset (x, y)
+    i32 ofy;            // Screen offset (x, y)
     u16 h;              // Projection plane distance
     i16 dqa;            // Depth queuing parameter A
     i32 dqb;            // Depth queuing parameter B

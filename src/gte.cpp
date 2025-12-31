@@ -5,6 +5,7 @@
 CycleCount GTE::execute(const u32 instruction)
 {
     const auto opcode = instruction & 0b111111;
+    flag = 0;
 
     switch (opcode)
     {
@@ -57,10 +58,10 @@ u32 GTE::read_register(const u32 reg)
         case  9: return (u32)(i32)ir1;
         case 10: return (u32)(i32)ir2;
         case 11: return (u32)(i32)ir3;
-        case 12: return ((u16)sy[0] << 16) | (u16)sx[0];
-        case 13: return ((u16)sy[1] << 16) | (u16)sx[1];
+        case 12: return ((u32)(u16)sy[0] << 16) | ((u32)sx[0] & 0xFFFF);
+        case 13: return ((u32)(u16)sy[1] << 16) | ((u32)sx[1] & 0xFFFF);
         case 14:
-        case 15: return ((u16)sy[2] << 16) | (u16)sx[2];
+        case 15: return ((u32)(u16)sy[2] << 16) | ((u32)sx[2] & 0xFFFF);
         case 16: return (u16)sz[0];
         case 17: return (u16)sz[1];
         case 18: return (u16)sz[2];
@@ -105,11 +106,11 @@ u32 GTE::read_register(const u32 reg)
         case 50: return ((u32)lc[1][2] << 16) | ((u32)lc[1][1] & 0xFFFF);
         case 51: return ((u32)lc[2][1] << 16) | ((u32)lc[2][0] & 0xFFFF);
         case 52: return (u32)(i32)(lc[2][2]);
-        case 53: return rfc;
-        case 54: return gfc;
-        case 55: return bfc;
-        case 56: return ofx;
-        case 57: return ofy;
+        case 53: return (u32)rfc;
+        case 54: return (u32)gfc;
+        case 55: return (u32)bfc;
+        case 56: return (u32)ofx;
+        case 57: return (u32)ofy;
         case 58: return (u32)(i32)((i16)h); // Hardware bug
         case 59: return (u32)(i32)(dqa);
         case 60: return (u32)dqb;
@@ -214,11 +215,11 @@ void GTE::write_register(const u32 reg, const u32 value)
         case 50: lc[1][1] = (i16)value; lc[1][2] = (i16)(u16)(value >> 16);           break;
         case 51: lc[2][0] = (i16)value; lc[2][1] = (i16)(u16)(value >> 16);           break;
         case 52: lc[2][2] = (i16)value;                                               break;
-        case 53: rfc = value;                                                         break;
-        case 54: gfc = value;                                                         break;
-        case 55: bfc = value;                                                         break;
-        case 56: ofx = value;                                                         break;
-        case 57: ofy = value;                                                         break;
+        case 53: rfc = (i32)value;                                                    break;
+        case 54: gfc = (i32)value;                                                    break;
+        case 55: bfc = (i32)value;                                                    break;
+        case 56: ofx = (i32)value;                                                    break;
+        case 57: ofy = (i32)value;                                                    break;
         case 58: h = (u16)value;                                                      break;
         case 59: dqa = (i16)value;                                                    break;
         case 60: dqb = (i32)value;                                                    break;
@@ -305,7 +306,7 @@ i64 GTE::set_mac(i64 value, const bool shift_fraction)
 
 inline i64 GTE::set_mac0(const i64 value)
 {
-    check_overflow<32>(value, FLAG_MAC0_OVERFLOW_POSITIVE, FLAG_MAC0_OVERFLOW_POSITIVE);
+    check_overflow<32>(value, FLAG_MAC0_OVERFLOW_POSITIVE, FLAG_MAC0_OVERFLOW_NEGATIVE);
 	mac0 = (i32)value;
 	return value;
 }
@@ -427,8 +428,8 @@ CycleCount GTE::rtps(const u32 instruction)
     // Perform division; calculate ((H * 0x20000 / SZ3) + 1) / 2
 	const i64 unr_result = divide_unsigned_newton_raphson(h, sz[3]);
 
-    const i32 x = (i32)set_mac0(unr_result * ir1 + ofx) >> 16;
-    const i32 y = (i32)set_mac0(unr_result * ir2 + ofy) >> 16;
+    const i32 x = (i32)(set_mac0(unr_result * ir1 + ofx) >> 16);
+    const i32 y = (i32)(set_mac0(unr_result * ir2 + ofy) >> 16);
     push_screen_x_and_y(x, y);
 
     const i64 mac0 = set_mac0(unr_result * (i64)dqa + (i64)dqb);
