@@ -621,7 +621,7 @@ void CPU::swcz(const u32 instruction)
     if ((address & 0b11) != 0)
     {
         cp0.bad_a = address;
-        raise_exception(Exception::AddressErrorLoad);
+        raise_exception(Exception::AddressErrorStore);
         return;
     }
 
