@@ -40,7 +40,7 @@ CycleCount GTE::execute(const u32 instruction)
 
 u32 GTE::read_register(const u32 reg)
 {
-    switch (reg)
+    switch (reg & 0b111111)
     {
         case  0: return (u32)v0[0] | ((u32)v0[1] << 16);
         case  1: return (u32)(i32)v0[2];
@@ -57,8 +57,33 @@ u32 GTE::read_register(const u32 reg)
         case  9: return (u32)(i32)ir1;
         case 10: return (u32)(i32)ir2;
         case 11: return (u32)(i32)ir3;
+        case 12: return ((u16)sy[0] << 16) | (u16)sx[0];
+        case 13: return ((u16)sy[1] << 16) | (u16)sx[1];
         case 14:
         case 15: return ((u16)sy[2] << 16) | (u16)sx[2];
+        case 16: return (u16)sz[0];
+        case 17: return (u16)sz[1];
+        case 18: return (u16)sz[2];
+        case 19: return (u16)sz[3];
+        case 20: return rgb[0];
+        case 21: return rgb[1];
+        case 22: return rgb[2];
+        case 23: return 0; // Unused
+        case 24: return (u32)mac0;
+        case 25: return (u32)mac1;
+        case 26: return (u32)mac2;
+        case 27: return (u32)mac3;
+        case 28:
+        case 29:
+        {
+            u32 irgb = 0;
+            irgb |= (u32)clip(ir1 / 0x80, 0x1f, 0, 0);
+            irgb |= (u32)(clip(ir2 / 0x80, 0x1f, 0, 0) << 5);
+            irgb |= (u32)(clip(ir3 / 0x80, 0x1f, 0, 0) << 10);
+            return irgb;
+        }
+        case 30: return lzcs;
+        case 31: return lzcr;
         case 32: return ((u32)(u16)rt[0][1] << 16) | (u32)rt[0][0];
         case 33: return ((u32)(u16)rt[1][0] << 16) | (u32)rt[0][2];
         case 34: return ((u32)(u16)rt[1][2] << 16) | (u32)rt[1][1];
@@ -90,65 +115,95 @@ u32 GTE::read_register(const u32 reg)
         case 60: return (u32)dqb;
         case 61: return (u32)(i32)(zsf3);
         case 62: return (u32)(i32)(zsf4);
-
-        default:
-            dbg("TODO: unknown GTE register", reg);
-            exit(1);
+        case 63: return flag;
     }
 
+    return 0;
 }
 
 void GTE::write_register(const u32 reg, const u32 value)
 {
-    switch (reg)
+    switch (reg & 0b111111)
     {
-        case  0: v0[0] = (i16)(value & 0xFFFF); v0[1] = (i16)(value >> 16); break;
-        case  1: v0[2] = (i16)(value & 0xFFFF);                             break;
-        case  2: v1[0] = (i16)(value & 0xFFFF); v1[1] = (i16)(value >> 16); break;
-        case  3: v1[2] = (i16)(value & 0xFFFF);                             break;
-        case  4: v2[0] = (i16)(value & 0xFFFF); v2[1] = (i16)(value >> 16); break;
-        case  5: v2[2] = (i16)(value & 0xFFFF);                             break;
-
-        case 24: mac0 = (i64)(i32)value; break;
-        case 25: mac1 = (i64)(i32)value; break;
-        case 26: mac2 = (i64)(i32)value; break;
-        case 27: mac3 = (i64)(i32)value; break;
-
+        case  0: v0[0] = (i16)(value & 0xFFFF); v0[1] = (i16)(value >> 16);      break;
+        case  1: v0[2] = (i16)(value & 0xFFFF);                                  break;
+        case  2: v1[0] = (i16)(value & 0xFFFF); v1[1] = (i16)(value >> 16);      break;
+        case  3: v1[2] = (i16)(value & 0xFFFF);                                  break;
+        case  4: v2[0] = (i16)(value & 0xFFFF); v2[1] = (i16)(value >> 16);      break;
+        case  5: v2[2] = (i16)(value & 0xFFFF);                                  break;
+        case  6:
+            rgbc[0] = (u8)((value >>  0) & 0xFF);
+            rgbc[1] = (u8)((value >>  4) & 0xFF);
+            rgbc[2] = (u8)((value >>  8) & 0xFF);
+            rgbc[3] = (u8)((value >> 12) & 0xFF);
+            break;
+        case  7: otz = (u16)value;                                               break;
+        case  8: ir0 = (i16)(u16)value;                                          break;
+        case  9: ir1 = (i16)(u16)value;                                          break;
+        case 10: ir2 = (i16)(u16)value;                                          break;
+        case 11: ir3 = (i16)(u16)value;                                          break;
+        case 12: sy[0] = (i16)(u16)(value >> 16); sx[0] = (i16)(u16)value;       break;
+        case 13: sy[1] = (i16)(u16)(value >> 16); sx[1] = (i16)(u16)value;       break;
+        case 14: sy[2] = (i16)(u16)(value >> 16); sx[2] = (i16)(u16)value;       break;
+        case 15:
+            sx[0] = sx[1];
+            sy[0] = sy[1];
+            sx[1] = sx[2];
+            sy[1] = sy[2];
+            sx[2] = (i16)(u16)value;
+            sy[2] = (i16)(u16)(value >> 16);
+            break;
+        case 16: sz[0] = (u16)value;                                             break;
+        case 17: sz[1] = (u16)value;                                             break;
+        case 18: sz[2] = (u16)value;                                             break;
+        case 19: sz[3] = (u16)value;                                             break;
+        case 20: rgb[0] = value;                                                 break;
+        case 21: rgb[1] = value;                                                 break;
+        case 22: rgb[2] = value;                                                 break;
+        case 23:                                                                 break; // Prohibited
+        case 24: mac0 = (i64)(i32)value;                                         break;
+        case 25: mac1 = (i64)(i32)value;                                         break;
+        case 26: mac2 = (i64)(i32)value;                                         break;
+        case 27: mac3 = (i64)(i32)value;                                         break;
+        case 28:
+            ir1 = (i16)(u16)((value & 0x1f) * 0x80);
+            ir2 = (i16)(u16)(((value >> 5) & 0x1f) * 0x80);
+            break;
+        case 29:                                                                 break; // Read-only
+        case 30: lzcs = value; lzcr = (u32)std::countl_zero(lzcs);               break;
+        case 31:                                                                 break; // Read-only
         case 32: rt[0][0] = (i16)(u16)value; rt[0][1] = (i16)(u16)(value >> 16); break;
         case 33: rt[0][2] = (i16)(u16)value; rt[1][0] = (i16)(u16)(value >> 16); break;
         case 34: rt[1][1] = (i16)(u16)value; rt[1][2] = (i16)(u16)(value >> 16); break;
         case 35: rt[2][0] = (i16)(u16)value; rt[2][1] = (i16)(u16)(value >> 16); break;
         case 36: rt[2][2] = (i16)(u16)value;                                     break;
-        case 37: tr[0] = (i32)value;    break;
-        case 38: tr[1] = (i32)value;    break;
-        case 39: tr[2] = (i32)value;    break;
+        case 37: tr[0] = (i32)value;                                             break;
+        case 38: tr[1] = (i32)value;                                             break;
+        case 39: tr[2] = (i32)value;                                             break;
         case 40: ll[0][0] = (i16)(u16)value; ll[0][1] = (i16)(u16)(value >> 16); break;
         case 41: ll[0][2] = (i16)(u16)value; ll[1][0] = (i16)(u16)(value >> 16); break;
         case 42: ll[1][1] = (i16)(u16)value; ll[1][2] = (i16)(u16)(value >> 16); break;
         case 43: ll[2][0] = (i16)(u16)value; ll[2][1] = (i16)(u16)(value >> 16); break;
         case 44: ll[2][2] = (i16)(u16)value;                                     break;
-        case 45: rbk = value;           break;
-        case 46: gbk = value;           break;
-        case 47: bbk = value;           break;
+        case 45: rbk = value;                                                    break;
+        case 46: gbk = value;                                                    break;
+        case 47: bbk = value;                                                    break;
         case 48: lc[0][0] = (i16)(u16)value; lc[0][1] = (i16)(u16)(value >> 16); break;
         case 49: lc[0][2] = (i16)(u16)value; lc[1][0] = (i16)(u16)(value >> 16); break;
         case 50: lc[1][1] = (i16)(u16)value; lc[1][2] = (i16)(u16)(value >> 16); break;
         case 51: lc[2][0] = (i16)(u16)value; lc[2][1] = (i16)(u16)(value >> 16); break;
         case 52: lc[2][2] = (i16)(u16)value;                                     break;
-        case 53: rfc = value;           break;
-        case 54: gfc = value;           break;
-        case 55: bfc = value;           break;
-        case 56: ofx = value;           break;
-        case 57: ofy = value;           break;
-        case 58: h = (u16)value;        break;
-        case 59: dqa = (i16)value;      break;
-        case 60: dqb = (i32)value;      break;
-        case 61: zsf3 = (i16)value;     break;
-        case 62: zsf4 = (i16)value;     break;
-
-        default:
-            dbg("TODO: unknown GTE register", reg, dbg::hex(value));
-            exit(1);
+        case 53: rfc = value;                                                    break;
+        case 54: gfc = value;                                                    break;
+        case 55: bfc = value;                                                    break;
+        case 56: ofx = value;                                                    break;
+        case 57: ofy = value;                                                    break;
+        case 58: h = (u16)value;                                                 break;
+        case 59: dqa = (i16)value;                                               break;
+        case 60: dqb = (i32)value;                                               break;
+        case 61: zsf3 = (i16)value;                                              break;
+        case 62: zsf4 = (i16)value;                                              break;
+        case 63: flag = value & 0x7FFFF000;                                      break;
     }
 }
 
