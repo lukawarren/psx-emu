@@ -68,7 +68,7 @@ u32 GTE::read_register(const u32 reg)
         case 20: return rgb[0];
         case 21: return rgb[1];
         case 22: return rgb[2];
-        case 23: return 0; // Unused
+        case 23: return res1;
         case 24: return (u32)mac0;
         case 25: return (u32)mac1;
         case 26: return (u32)mac2;
@@ -84,26 +84,26 @@ u32 GTE::read_register(const u32 reg)
         }
         case 30: return lzcs;
         case 31: return lzcr;
-        case 32: return ((u32)(u16)rt[0][1] << 16) | (u32)rt[0][0];
-        case 33: return ((u32)(u16)rt[1][0] << 16) | (u32)rt[0][2];
-        case 34: return ((u32)(u16)rt[1][2] << 16) | (u32)rt[1][1];
-        case 35: return ((u32)(u16)rt[2][1] << 16) | (u32)rt[2][0];
+        case 32: return ((u32)rt[0][1] << 16) | ((u32)rt[0][0] & 0xFFFF);
+        case 33: return ((u32)rt[1][0] << 16) | ((u32)rt[0][2] & 0xFFFF);
+        case 34: return ((u32)rt[1][2] << 16) | ((u32)rt[1][1] & 0xFFFF);
+        case 35: return ((u32)rt[2][1] << 16) | ((u32)rt[2][0] & 0xFFFF);
         case 36: return (u32)(i32)(rt[2][2]);
         case 37: return (u32)tr[0];
         case 38: return (u32)tr[1];
         case 39: return (u32)tr[2];
-        case 40: return ((u32)(u16)ll[0][1] << 16) | (u32)ll[0][0];
-        case 41: return ((u32)(u16)ll[1][0] << 16) | (u32)ll[0][2];
-        case 42: return ((u32)(u16)ll[1][2] << 16) | (u32)ll[1][1];
-        case 43: return ((u32)(u16)ll[2][1] << 16) | (u32)ll[2][0];
+        case 40: return ((u32)ll[0][1] << 16) | ((u32)ll[0][0] & 0xFFFF);
+        case 41: return ((u32)ll[1][0] << 16) | ((u32)ll[0][2] & 0xFFFF);
+        case 42: return ((u32)ll[1][2] << 16) | ((u32)ll[1][1] & 0xFFFF);
+        case 43: return ((u32)ll[2][1] << 16) | ((u32)ll[2][0] & 0xFFFF);
         case 44: return (u32)(i32)(ll[2][2]);
         case 45: return rbk;
         case 46: return gbk;
         case 47: return bbk;
-        case 48: return ((u32)(u16)lc[0][1] << 16) | (u32)lc[0][0];
-        case 49: return ((u32)(u16)lc[1][0] << 16) | (u32)lc[0][2];
-        case 50: return ((u32)(u16)lc[1][2] << 16) | (u32)lc[1][1];
-        case 51: return ((u32)(u16)lc[2][1] << 16) | (u32)lc[2][0];
+        case 48: return ((u32)lc[0][1] << 16) | ((u32)lc[0][0] & 0xFFFF);
+        case 49: return ((u32)lc[1][0] << 16) | ((u32)lc[0][2] & 0xFFFF);
+        case 50: return ((u32)lc[1][2] << 16) | ((u32)lc[1][1] & 0xFFFF);
+        case 51: return ((u32)lc[2][1] << 16) | ((u32)lc[2][0] & 0xFFFF);
         case 52: return (u32)(i32)(lc[2][2]);
         case 53: return rfc;
         case 54: return gfc;
@@ -115,7 +115,23 @@ u32 GTE::read_register(const u32 reg)
         case 60: return (u32)dqb;
         case 61: return (u32)(i32)(zsf3);
         case 62: return (u32)(i32)(zsf4);
-        case 63: return flag;
+        case 63:
+            const auto or_over = [](const u32 v, const u32 from, const u32 to)
+            {
+                bool result = false;
+                for (size_t i = to; i <= from; ++i)
+                    result |= (v & (1 << i)) != 0;
+
+                return result;
+            };
+
+            // Re-compute if an error did indeed occur
+            if (or_over(flag, 30, 23) | or_over(flag, 18, 13))
+                flag |= FLAG_ERROR;
+            else
+                flag &= ~FLAG_ERROR;
+
+            return flag;
     }
 
     return 0;
@@ -133,9 +149,9 @@ void GTE::write_register(const u32 reg, const u32 value)
         case  5: v2[2] = (i16)(u16)(value & 0xFFFF);                                  break;
         case  6:
             rgbc[0] = (u8)((value >>  0) & 0xFF);
-            rgbc[1] = (u8)((value >>  4) & 0xFF);
-            rgbc[2] = (u8)((value >>  8) & 0xFF);
-            rgbc[3] = (u8)((value >> 12) & 0xFF);
+            rgbc[1] = (u8)((value >>  8) & 0xFF);
+            rgbc[2] = (u8)((value >> 16) & 0xFF);
+            rgbc[3] = (u8)((value >> 24) & 0xFF);
             break;
         case  7: otz = (u16)value;                                                    break;
         case  8: ir0 = (i16)(u16)value;                                               break;
@@ -160,7 +176,7 @@ void GTE::write_register(const u32 reg, const u32 value)
         case 20: rgb[0] = value;                                                      break;
         case 21: rgb[1] = value;                                                      break;
         case 22: rgb[2] = value;                                                      break;
-        case 23:                                                                      break; // Prohibited
+        case 23: res1 = value;                                                        break;
         case 24: mac0 = (i64)(i32)value;                                              break;
         case 25: mac1 = (i64)(i32)value;                                              break;
         case 26: mac2 = (i64)(i32)value;                                              break;
@@ -168,31 +184,36 @@ void GTE::write_register(const u32 reg, const u32 value)
         case 28:
             ir1 = (i16)(u16)((value & 0x1f) * 0x80);
             ir2 = (i16)(u16)(((value >> 5) & 0x1f) * 0x80);
+            ir3 = (i16)(u16)(((value >> 10) & 0x1f) * 0x80);
             break;
         case 29:                                                                      break; // Read-only
-        case 30: lzcs = value; lzcr = (u32)std::countl_zero(lzcs);                    break;
+        case 30:
+            // If negative, count leading ones (i.e. invert it)
+            lzcs = value;
+            lzcr = (u32)std::countl_zero((lzcs & 0x80000000) != 0 ? ~lzcs : lzcs);
+            break;
         case 31:                                                                      break; // Read-only
-        case 32: rt[0][0] = (i16)(u16)value; rt[0][1] = (i16)(u16)(value >> 16);      break;
-        case 33: rt[0][2] = (i16)(u16)value; rt[1][0] = (i16)(u16)(value >> 16);      break;
-        case 34: rt[1][1] = (i16)(u16)value; rt[1][2] = (i16)(u16)(value >> 16);      break;
-        case 35: rt[2][0] = (i16)(u16)value; rt[2][1] = (i16)(u16)(value >> 16);      break;
-        case 36: rt[2][2] = (i16)(u16)value;                                          break;
+        case 32: rt[0][0] = (i16)value; rt[0][1] = (i16)(value >> 16);                break;
+        case 33: rt[0][2] = (i16)value; rt[1][0] = (i16)(value >> 16);                break;
+        case 34: rt[1][1] = (i16)value; rt[1][2] = (i16)(value >> 16);                break;
+        case 35: rt[2][0] = (i16)value; rt[2][1] = (i16)(value >> 16);                break;
+        case 36: rt[2][2] = (i16)value;                                               break;
         case 37: tr[0] = (i32)value;                                                  break;
         case 38: tr[1] = (i32)value;                                                  break;
         case 39: tr[2] = (i32)value;                                                  break;
-        case 40: ll[0][0] = (i16)(u16)value; ll[0][1] = (i16)(u16)(value >> 16);      break;
-        case 41: ll[0][2] = (i16)(u16)value; ll[1][0] = (i16)(u16)(value >> 16);      break;
-        case 42: ll[1][1] = (i16)(u16)value; ll[1][2] = (i16)(u16)(value >> 16);      break;
-        case 43: ll[2][0] = (i16)(u16)value; ll[2][1] = (i16)(u16)(value >> 16);      break;
-        case 44: ll[2][2] = (i16)(u16)value;                                          break;
+        case 40: ll[0][0] = (i16)value; ll[0][1] = (i16)(u16)(value >> 16);           break;
+        case 41: ll[0][2] = (i16)value; ll[1][0] = (i16)(u16)(value >> 16);           break;
+        case 42: ll[1][1] = (i16)value; ll[1][2] = (i16)(u16)(value >> 16);           break;
+        case 43: ll[2][0] = (i16)value; ll[2][1] = (i16)(u16)(value >> 16);           break;
+        case 44: ll[2][2] = (i16)value;                                               break;
         case 45: rbk = value;                                                         break;
         case 46: gbk = value;                                                         break;
         case 47: bbk = value;                                                         break;
-        case 48: lc[0][0] = (i16)(u16)value; lc[0][1] = (i16)(u16)(value >> 16);      break;
-        case 49: lc[0][2] = (i16)(u16)value; lc[1][0] = (i16)(u16)(value >> 16);      break;
-        case 50: lc[1][1] = (i16)(u16)value; lc[1][2] = (i16)(u16)(value >> 16);      break;
-        case 51: lc[2][0] = (i16)(u16)value; lc[2][1] = (i16)(u16)(value >> 16);      break;
-        case 52: lc[2][2] = (i16)(u16)value;                                          break;
+        case 48: lc[0][0] = (i16)value; lc[0][1] = (i16)(u16)(value >> 16);           break;
+        case 49: lc[0][2] = (i16)value; lc[1][0] = (i16)(u16)(value >> 16);           break;
+        case 50: lc[1][1] = (i16)value; lc[1][2] = (i16)(u16)(value >> 16);           break;
+        case 51: lc[2][0] = (i16)value; lc[2][1] = (i16)(u16)(value >> 16);           break;
+        case 52: lc[2][2] = (i16)value;                                               break;
         case 53: rfc = value;                                                         break;
         case 54: gfc = value;                                                         break;
         case 55: bfc = value;                                                         break;
@@ -373,7 +394,6 @@ u32 GTE::divide_unsigned_newton_raphson(u32 lhs, u32 rhs)
     else
     {
         flag |= FLAG_DIVIDE_OVERFLOW;
-        flag |= FLAG_ERROR;
         return 0x1ffff;
     }
 }

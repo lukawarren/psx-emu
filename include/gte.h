@@ -22,6 +22,7 @@ private:
     i16 sy[3];          // SY0, SY1, SY2 (and SXYP); 3 stages
     u16 sz[4];          // SZ0, SZ1, SZ2, SZ3; 4 stages
     u32 rgb[3];         // 3 stages
+    u32 res1;           // Prohibited but needed to pass GTE tests
     i32 mac0;           // 32-bit maths accumulator (value)
     i32 mac1;           // 32-bit maths accumulator (vector)
     i32 mac2;           // 32-bit maths accumulator (vector)
