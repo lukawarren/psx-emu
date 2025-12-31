@@ -46,7 +46,7 @@ void CPU::clock()
 
 #if SIDELOAD_EXE
     static bool did_sideload = false;
-    if (pc == 0x80030000 && !did_sideload)
+    if (!did_sideload && pc == 0x80030000)
     {
         did_sideload = true;
         // bus.sideload_exe("../tests/gpu/triangle/triangle.exe");
@@ -54,7 +54,8 @@ void CPU::clock()
         // bus.sideload_exe("../tests/gpu/quad/quad.exe");
         // bus.sideload_exe("../tests/gpu/texture-overflow/texture-overflow.exe");
         // bus.sideload_exe("../tests/gpu/texture-flip/texture-flip.exe");
-        bus.sideload_exe("../tests/gpu/animated-triangle/animated-triangle.exe");
+        // bus.sideload_exe("../tests/gpu/animated-triangle/animated-triangle.exe");
+        bus.sideload_exe("../tests/gte/test-all/test-all.exe");
         // bus.sideload_exe("../tests/psxtest_cpu.exe");
     }
 #endif
@@ -624,7 +625,6 @@ void CPU::swcz(const u32 instruction)
         return;
     }
 
-    const auto rt = get_rt(instruction);
     bus.write_u32(
         address,
         gte.read_register(get_rt(instruction))
