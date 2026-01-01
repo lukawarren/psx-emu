@@ -207,7 +207,7 @@ u16 Bus::read_u16(const u32 address)
 
     // I/O
     if (WITHIN(0x1F801000, 4096) || address == 0xFFFE0130)
-        return io_read_u16(address);
+        return io_read_u16(physical_address);
 
     dbg("TODO: unknown bus read", dbg::hex(address), dbg::hex(physical_address));
     exit(1);
@@ -225,7 +225,7 @@ u32 Bus::read_u32(const u32 address)
 
     // I/O
     if (WITHIN(0x1F801000, 4096) || address == 0xFFFE0130)
-        return io_read_u32(address);
+        return io_read_u32(physical_address);
 
     dbg("TODO: unknown bus read", dbg::hex(address), dbg::hex(physical_address));
     exit(1);
@@ -276,7 +276,7 @@ void Bus::write_u16(const u32 address, const u16 value)
     // I/O
     if (WITHIN(0x1F801000, 4096))
     {
-        io_write_u32(address, value);
+        io_write_u32(physical_address, value);
         return;
     }
 
@@ -291,7 +291,7 @@ void Bus::write_u32(const u32 address, const u32 value)
     // I/O
     if (WITHIN(0x1F801000, 4096) || physical_address == 0xFFFE0130)
     {
-        io_write_u32(address, value);
+        io_write_u32(physical_address, value);
         return;
     }
 
