@@ -542,7 +542,12 @@ CycleCount GTE::mvmva(const u32 instruction)
         case 0: memcpy(mx, rt, sizeof(mx)); break;
         case 1: memcpy(mx, ll, sizeof(mx)); break;
         case 2: memcpy(mx, lc, sizeof(mx)); break;
-        case 3: dbg("TODO"); exit(1);
+        case 3:
+            mx[0][0] = -(i16)(rgbc[0] << 4);
+            mx[0][1] =  (i16)(rgbc[0] << 4);
+            mx[0][2] = ir0;
+            mx[1][0] = mx[1][1] = mx[1][2] = rt[0][2];
+            mx[2][0] = mx[2][1] = mx[2][2] = rt[1][1];
     }
 
     const u32 vector = (instruction >> 15) & 0b11;
@@ -551,28 +556,55 @@ CycleCount GTE::mvmva(const u32 instruction)
         case 0: memcpy(vx, v0, sizeof(vx)); break;
         case 1: memcpy(vx, v1, sizeof(vx)); break;
         case 2: memcpy(vx, v2, sizeof(vx)); break;
-        case 3: dbg("TODO"); exit(1);
+        case 3:
+            vx[0] = ir1;
+            vx[1] = ir2;
+            vx[2] = ir3;
     }
 
     const u32 translation = (instruction >> 13) & 0b11;
     switch (translation)
     {
         case 0: memcpy(tx, tr, sizeof(tx)); break;
-        case 1: dbg("TODO"); exit(1); break;
-        case 2: dbg("TODO"); exit(1); break;
+
+        case 1:
+            tx[0] = (i32)rbk;
+            tx[1] = (i32)gbk;
+            tx[2] = (i32)bbk;
+        break;
+
+        case 2:
+            tx[0] = rfc;
+            tx[1] = gfc;
+            tx[2] = bfc;
+        break;
+
         case 3: memset(tx, 0, sizeof(tx)); break;
     }
 
-    // TX + MX * VX
-    i64 new_mac_1 = CMOAE(1, CMOAE(1, CMOAE(1, ((i64)tx[0] << 12) + (i64)mx[0][0] * vx[0]) + (i64)mx[0][1] * vx[1]) + i64(mx[0][2]) * vx[2]);
-    i64 new_mac_2 = CMOAE(2, CMOAE(2, CMOAE(2, ((i64)tx[1] << 12) + (i64)mx[1][0] * vx[0]) + (i64)mx[1][1] * vx[1]) + i64(mx[1][2]) * vx[2]);
-    i64 new_mac_3 = CMOAE(3, CMOAE(3, CMOAE(3, ((i64)tx[2] << 12) + (i64)mx[2][0] * vx[0]) + (i64)mx[2][1] * vx[1]) + i64(mx[2][2]) * vx[2]);
-
     const bool sf = get_shift_fraction(instruction);
     const bool lm = get_limit(instruction);
-    set_mac_and_ir<1>(new_mac_1, sf, lm);
-    set_mac_and_ir<2>(new_mac_2, sf, lm);
-    set_mac_and_ir<3>(new_mac_3, sf, lm);
+
+    if (translation == 2)
+    {
+        // Bugged
+        set_ir<1>((i32)(CMOAE(1, ((i64)tx[0] << 12) + (i64)mx[0][0] * vx[0]) >> (sf * 12)), lm);
+        set_ir<2>((i32)(CMOAE(2, ((i64)tx[1] << 12) + (i64)mx[1][0] * vx[0]) >> (sf * 12)), lm);
+        set_ir<3>((i32)(CMOAE(3, ((i64)tx[2] << 12) + (i64)mx[2][0] * vx[0]) >> (sf * 12)), lm);
+        set_mac_and_ir<1>(CMOAE(1, CMOAE(1, (i64)mx[0][1] * vx[1]) + (i64)mx[0][2] * vx[2]), sf, lm);
+        set_mac_and_ir<2>(CMOAE(2, CMOAE(2, (i64)mx[1][1] * vx[1]) + (i64)mx[1][2] * vx[2]), sf, lm);
+        set_mac_and_ir<3>(CMOAE(3, CMOAE(3, (i64)mx[2][1] * vx[1]) + (i64)mx[2][2] * vx[2]), sf, lm);
+    }
+    else
+    {
+        // TX + MX * VX
+        i64 new_mac_1 = CMOAE(1, CMOAE(1, CMOAE(1, ((i64)tx[0] << 12) + (i64)mx[0][0] * vx[0]) + (i64)mx[0][1] * vx[1]) + i64(mx[0][2]) * vx[2]);
+        i64 new_mac_2 = CMOAE(2, CMOAE(2, CMOAE(2, ((i64)tx[1] << 12) + (i64)mx[1][0] * vx[0]) + (i64)mx[1][1] * vx[1]) + i64(mx[1][2]) * vx[2]);
+        i64 new_mac_3 = CMOAE(3, CMOAE(3, CMOAE(3, ((i64)tx[2] << 12) + (i64)mx[2][0] * vx[0]) + (i64)mx[2][1] * vx[1]) + i64(mx[2][2]) * vx[2]);
+        set_mac_and_ir<1>(new_mac_1, sf, lm);
+        set_mac_and_ir<2>(new_mac_2, sf, lm);
+        set_mac_and_ir<3>(new_mac_3, sf, lm);
+    }
 
     return 8;
 }
