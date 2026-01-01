@@ -357,6 +357,23 @@ void GTE::push_screen_z(i32 z)
     sz[3] = (u16)clip(z, 0xffff, 0x0000, FLAG_SZ3_OTZ_SATURATED);
 }
 
+void GTE::push_colour()
+{
+    push_colour((u32)(mac1 >> 4), (u32)(mac2 >> 4), (u32)(mac3 >> 4), (u32)rgbc[3]);
+}
+
+void GTE::push_colour(const u32 r, const u32 g, const u32 b, const u32 code)
+{
+    rgb[0] = rgb[1];
+    rgb[1] = rgb[2];
+    rgb[2] = (
+        ((u32)clip((i32)r, 0xff, 0, FLAG_COLOR_R_SATURATED) << 0)  |
+        ((u32)clip((i32)g, 0xff, 0, FLAG_COLOR_G_SATURATED) << 8)  |
+        ((u32)clip((i32)b, 0xff, 0, FLAG_COLOR_B_SATURATED) << 16) |
+        (code << 24)
+    );
+}
+
 u32 GTE::divide_unsigned_newton_raphson(u32 lhs, u32 rhs)
 {
     if (lhs < rhs * 2)
@@ -406,10 +423,10 @@ CycleCount GTE::rtps(const u32 instruction)
     const bool lm = get_limit(instruction);
 
     // TR + RT * V0
-    int64_t result[3];
-    result[0] = CMOAE(1, CMOAE(1, CMOAE(1, ((int64_t)tr[0] << 12) + rt[0][0] * v0[0]) + rt[0][1] * v0[1]) + rt[0][2] * v0[2]);
-    result[1] = CMOAE(2, CMOAE(2, CMOAE(2, ((int64_t)tr[1] << 12) + rt[1][0] * v0[0]) + rt[1][1] * v0[1]) + rt[1][2] * v0[2]);
-    result[2] = CMOAE(3, CMOAE(3, CMOAE(3, ((int64_t)tr[2] << 12) + rt[2][0] * v0[0]) + rt[2][1] * v0[1]) + rt[2][2] * v0[2]);
+    i64 result[3];
+    result[0] = CMOAE(1, CMOAE(1, CMOAE(1, ((i64)tr[0] << 12) + rt[0][0] * v0[0]) + rt[0][1] * v0[1]) + rt[0][2] * v0[2]);
+    result[1] = CMOAE(2, CMOAE(2, CMOAE(2, ((i64)tr[1] << 12) + rt[1][0] * v0[0]) + rt[1][1] * v0[1]) + rt[1][2] * v0[2]);
+    result[2] = CMOAE(3, CMOAE(3, CMOAE(3, ((i64)tr[2] << 12) + rt[2][0] * v0[0]) + rt[2][1] * v0[1]) + rt[2][2] * v0[2]);
 
     // Write to IR (save for 3) and MAC
     set_mac_and_ir<1>(result[0], sf, lm);
@@ -438,7 +455,7 @@ CycleCount GTE::rtps(const u32 instruction)
     return 15;
 }
 
-// Normal Clip
+// Normal clip
 CycleCount GTE::nclip(const u32 instruction)
 {
     (void)instruction;
@@ -453,6 +470,7 @@ CycleCount GTE::nclip(const u32 instruction)
     return 8;
 }
 
+// Outer product (cross product)
 CycleCount GTE::op(const u32 instruction)
 {
     const bool sf = get_shift_fraction(instruction);
@@ -466,8 +484,50 @@ CycleCount GTE::op(const u32 instruction)
     return 6;
 }
 
-CycleCount GTE::dpcs(const u32 instruction) { dbg("TODO", dbg::hex(instruction & 0b111111)); exit(1); return 0; }
-CycleCount GTE::intpl(const u32 instruction) { dbg("TODO", dbg::hex(instruction & 0b111111)); exit(1); return 0; }
+// Depth cueing (single)
+CycleCount GTE::dpcs(const u32 instruction, const bool force_rgb0)
+{
+    const bool sf = get_shift_fraction(instruction);
+    const bool lm = get_limit(instruction);
+
+    const i16 r = force_rgb0 ? (i16)((rgb[0] >>  0) & 0xFF) : (i16)(rgbc[0] << 4);
+    const i16 g = force_rgb0 ? (i16)((rgb[0] >>  8) & 0xFF) : (i16)(rgbc[1] << 4);
+    const i16 b = force_rgb0 ? (i16)((rgb[0] >> 16) & 0xFF) : (i16)(rgbc[2] << 4);
+
+    set_mac_and_ir<1>(((i64)rfc << 12) - ((i64)r << 12), sf, false);
+    set_mac_and_ir<2>(((i64)gfc << 12) - ((i64)g << 12), sf, false);
+    set_mac_and_ir<3>(((i64)bfc << 12) - ((i64)b << 12), sf, false);
+
+    set_mac_and_ir<1>(((i64)r << 12) + (i64)ir0 * ir1, sf, lm);
+    set_mac_and_ir<2>(((i64)g << 12) + (i64)ir0 * ir2, sf, lm);
+    set_mac_and_ir<3>(((i64)b << 12) + (i64)ir0 * ir3, sf, lm);
+
+    push_colour();
+
+    return 8;
+}
+
+// Interpolation of a vector and far color
+CycleCount GTE::intpl(const u32 instruction)
+{
+    const bool sf = get_shift_fraction(instruction);
+    const bool lm = get_limit(instruction);
+
+    const i16 previous_ir1 = ir1;
+    const i16 previous_ir2 = ir2;
+    const i16 previous_ir3 = ir3;
+
+    set_mac_and_ir<1>(((i64)rfc << 12) - ((i64)previous_ir1 << 12), sf, false);
+    set_mac_and_ir<2>(((i64)gfc << 12) - ((i64)previous_ir2 << 12), sf, false);
+    set_mac_and_ir<3>(((i64)bfc << 12) - ((i64)previous_ir3 << 12), sf, false);
+
+    set_mac_and_ir<1>(((i64)previous_ir1 << 12) + (i64)ir0 * ir1, sf, lm);
+    set_mac_and_ir<2>(((i64)previous_ir2 << 12) + (i64)ir0 * ir2, sf, lm);
+    set_mac_and_ir<3>(((i64)previous_ir3 << 12) + (i64)ir0 * ir3, sf, lm);
+
+    push_colour();
+    return 8;
+}
 
 // Multiply vector by matrix and add vector
 CycleCount GTE::mvmva(const u32 instruction)
@@ -525,8 +585,42 @@ CycleCount GTE::cc(const u32 instruction) { dbg("TODO", dbg::hex(instruction & 0
 CycleCount GTE::ncs(const u32 instruction) { dbg("TODO", dbg::hex(instruction & 0b111111)); exit(1); return 0; }
 CycleCount GTE::nct(const u32 instruction) { dbg("TODO", dbg::hex(instruction & 0b111111)); exit(1); return 0; }
 CycleCount GTE::sqr(const u32 instruction) { dbg("TODO", dbg::hex(instruction & 0b111111)); exit(1); return 0; }
-CycleCount GTE::dcpl(const u32 instruction) { dbg("TODO", dbg::hex(instruction & 0b111111)); exit(1); return 0; }
-CycleCount GTE::dpct(const u32 instruction) { dbg("TODO", dbg::hex(instruction & 0b111111)); exit(1); return 0; }
+
+// Depth cueing colour light
+CycleCount GTE::dcpl(const u32 instruction)
+{
+    const bool sf = get_shift_fraction(instruction);
+    const bool lm = get_limit(instruction);
+
+    const i16 r = (i16)(rgbc[0] << 4);
+    const i16 g = (i16)(rgbc[1] << 4);
+    const i16 b = (i16)(rgbc[2] << 4);
+
+    const i16 previous_ir1 = ir1;
+    const i16 previous_ir2 = ir2;
+    const i16 previous_ir3 = ir3;
+
+    set_mac_and_ir<1>(((i64)rfc << 12) - ((i64)r * previous_ir1), sf, false);
+    set_mac_and_ir<2>(((i64)gfc << 12) - ((i64)g * previous_ir2), sf, false);
+    set_mac_and_ir<3>(((i64)bfc << 12) - ((i64)b * previous_ir3), sf, false);
+
+    set_mac_and_ir<1>(((i64)r * previous_ir1) + (i64)ir0 * ir1, sf, lm);
+    set_mac_and_ir<2>(((i64)g * previous_ir2) + (i64)ir0 * ir2, sf, lm);
+    set_mac_and_ir<3>(((i64)b * previous_ir3) + (i64)ir0 * ir3, sf, lm);
+
+    push_colour();
+    return 8;
+}
+
+// Depth cueing (triple)
+CycleCount GTE::dpct(const u32 instruction)
+{
+    dpcs(instruction, true);
+    dpcs(instruction, true);
+    dpcs(instruction, true);
+    return 17;
+}
+
 CycleCount GTE::avsz3(const u32 instruction) { dbg("TODO", dbg::hex(instruction & 0b111111)); exit(1); return 0; };
 CycleCount GTE::avsz4(const u32 instruction) { dbg("TODO", dbg::hex(instruction & 0b111111)); exit(1); return 0; };
 CycleCount GTE::rtpt(const u32 instruction) { dbg("TODO", dbg::hex(instruction & 0b111111)); exit(1); return 0; }

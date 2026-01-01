@@ -123,6 +123,8 @@ private:
 
     void push_screen_x_and_y(const i32 x, const i32 y);
     void push_screen_z(const i32 z);
+    void push_colour();
+    void push_colour(const u32 r, const u32 g, const u32 b, const u32 code);
 
     u32 divide_unsigned_newton_raphson(u32 lhs, u32 rhs);
 
@@ -130,7 +132,7 @@ private:
     CycleCount rtps (const u32 instruction);
     CycleCount nclip(const u32 instruction);
     CycleCount op   (const u32 instruction);
-    CycleCount dpcs (const u32 instruction);
+    CycleCount dpcs (const u32 instruction, const bool force_rgb0 = false);
     CycleCount intpl(const u32 instruction);
     CycleCount mvmva(const u32 instruction);
     CycleCount ncds (const u32 instruction);
