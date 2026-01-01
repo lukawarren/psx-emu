@@ -424,9 +424,9 @@ u32 GTE::divide_unsigned_newton_raphson(u32 lhs, u32 rhs)
 void GTE::multiply_vectors(
     const std::array<i16, 3> v1,
     const std::array<i16, 3> v2,
-    const std::array<i16, 3> tr,
     const bool sf,
-    const bool lm
+    const bool lm,
+    const std::array<i16, 3> tr
 )
 {
     set_mac_and_ir<1>(((i64)tr[0] << 12) + v1[0] * v2[0], sf, lm);
@@ -452,16 +452,18 @@ void GTE::multiply_vector_by_matrix(
 }
 
 // Perspective transformation (single)
-CycleCount GTE::rtps(const u32 instruction)
+CycleCount GTE::rtps(const u32 instruction, const int n, const bool do_set_mac0)
 {
     const bool sf = get_shift_fraction(instruction);
     const bool lm = get_limit(instruction);
 
-    // TR + RT * V0
+    auto& v = n == 0 ? v0 : n == 1 ? v1 : v2;
+
+    // TR + RT * V[n]
     i64 result[3];
-    result[0] = CMOAE(1, CMOAE(1, CMOAE(1, ((i64)tr[0] << 12) + rt[0][0] * v0[0]) + rt[0][1] * v0[1]) + rt[0][2] * v0[2]);
-    result[1] = CMOAE(2, CMOAE(2, CMOAE(2, ((i64)tr[1] << 12) + rt[1][0] * v0[0]) + rt[1][1] * v0[1]) + rt[1][2] * v0[2]);
-    result[2] = CMOAE(3, CMOAE(3, CMOAE(3, ((i64)tr[2] << 12) + rt[2][0] * v0[0]) + rt[2][1] * v0[1]) + rt[2][2] * v0[2]);
+    result[0] = CMOAE(1, CMOAE(1, CMOAE(1, ((i64)tr[0] << 12) + rt[0][0] * v[0]) + rt[0][1] * v[1]) + rt[0][2] * v[2]);
+    result[1] = CMOAE(2, CMOAE(2, CMOAE(2, ((i64)tr[1] << 12) + rt[1][0] * v[0]) + rt[1][1] * v[1]) + rt[1][2] * v[2]);
+    result[2] = CMOAE(3, CMOAE(3, CMOAE(3, ((i64)tr[2] << 12) + rt[2][0] * v[0]) + rt[2][1] * v[1]) + rt[2][2] * v[2]);
 
     // Write to IR (save for 3) and MAC
     set_mac_and_ir<1>(result[0], sf, lm);
@@ -484,8 +486,11 @@ CycleCount GTE::rtps(const u32 instruction)
     const i32 y = (i32)(set_mac0(unr_result * ir2 + ofy) >> 16);
     push_screen_x_and_y(x, y);
 
-    const i64 mac0 = set_mac0(unr_result * (i64)dqa + (i64)dqb);
-    ir0 = (i16)clip((i32)(mac0 >> 12), 0x1000, 0x0000, FLAG_IR0_SATURATED);
+    if (do_set_mac0)
+    {
+        const i64 mac0 = set_mac0(unr_result * (i64)dqa + (i64)dqb);
+        ir0 = (i16)clip((i32)(mac0 >> 12), 0x1000, 0x0000, FLAG_IR0_SATURATED);
+    }
 
     return 15;
 }
@@ -525,20 +530,20 @@ CycleCount GTE::dpcs(const u32 instruction, const bool force_rgb0)
     const bool sf = get_shift_fraction(instruction);
     const bool lm = get_limit(instruction);
 
-    const i16 r = force_rgb0 ? (i16)((rgb[0] >>  0) & 0xFF) : (i16)R;
-    const i16 g = force_rgb0 ? (i16)((rgb[0] >>  8) & 0xFF) : (i16)G;
-    const i16 b = force_rgb0 ? (i16)((rgb[0] >> 16) & 0xFF) : (i16)B;
+    const i16 r = force_rgb0 ? (i16)(((rgb[0] >>  0) & 0xFF) << 4) : (i16)R;
+    const i16 g = force_rgb0 ? (i16)(((rgb[0] >>  8) & 0xFF) << 4) : (i16)G;
+    const i16 b = force_rgb0 ? (i16)(((rgb[0] >> 16) & 0xFF) << 4) : (i16)B;
 
     set_mac_and_ir<1>(((i64)rfc << 12) - ((i64)r << 12), sf, false);
     set_mac_and_ir<2>(((i64)gfc << 12) - ((i64)g << 12), sf, false);
     set_mac_and_ir<3>(((i64)bfc << 12) - ((i64)b << 12), sf, false);
 
     multiply_vectors(
-        as_vector(ir0),
-        as_vector(ir1, ir2, ir3),
-        as_vector(r, g, b),
+        { ir0, ir0, ir0 },
+        { ir1, ir2, ir3 },
         sf,
-        lm
+        lm,
+        { r, g, b }
     );
 
     push_colour();
@@ -560,11 +565,11 @@ CycleCount GTE::intpl(const u32 instruction)
     set_mac_and_ir<3>(((i64)bfc << 12) - ((i64)previous_ir3 << 12), sf, false);
 
     multiply_vectors(
-        as_vector(ir0),
-        as_vector(ir1, ir2, ir3),
-        as_vector(previous_ir1, previous_ir2, previous_ir3),
+        { ir0, ir0, ir0 },
+        { ir1, ir2, ir3 },
         sf,
-        lm
+        lm,
+        { previous_ir1, previous_ir2, previous_ir3 }
     );
 
     push_colour();
@@ -688,13 +693,99 @@ CycleCount GTE::ncds(const u32 instruction, const int n)
     return 19;
 }
 
-CycleCount GTE::cdp(const u32 instruction) { dbg("TODO", dbg::hex(instruction & 0b111111)); exit(1); return 0; }
-CycleCount GTE::ncdt(const u32 instruction) { dbg("TODO", dbg::hex(instruction & 0b111111)); exit(1); return 0; }
-CycleCount GTE::nccs(const u32 instruction) { dbg("TODO", dbg::hex(instruction & 0b111111)); exit(1); return 0; }
-CycleCount GTE::cc(const u32 instruction) { dbg("TODO", dbg::hex(instruction & 0b111111)); exit(1); return 0; }
-CycleCount GTE::ncs(const u32 instruction) { dbg("TODO", dbg::hex(instruction & 0b111111)); exit(1); return 0; }
-CycleCount GTE::nct(const u32 instruction) { dbg("TODO", dbg::hex(instruction & 0b111111)); exit(1); return 0; }
-CycleCount GTE::sqr(const u32 instruction) { dbg("TODO", dbg::hex(instruction & 0b111111)); exit(1); return 0; }
+// Colour depth cue
+CycleCount GTE::cdp(const u32 instruction)
+{
+    const bool sf = get_shift_fraction(instruction);
+    const bool lm = get_limit(instruction);
+
+    multiply_vector_by_matrix(
+        M(lc),
+        { ir1, ir2, ir3 },
+        sf,
+        lm,
+        { rbk, gbk, bbk }
+    );
+
+    const i16 previous_ir1 = ir1;
+    const i16 previous_ir2 = ir2;
+    const i16 previous_ir3 = ir3;
+
+    set_mac_and_ir<1>(((i64)rfc << 12) - (R * ir1), sf, false);
+    set_mac_and_ir<2>(((i64)gfc << 12) - (G * ir2), sf, false);
+    set_mac_and_ir<3>(((i64)bfc << 12) - (B * ir3), sf, false);
+
+    set_mac_and_ir<1>((R * previous_ir1) + ir0 * ir1, sf, lm);
+    set_mac_and_ir<2>((G * previous_ir2) + ir0 * ir2, sf, lm);
+    set_mac_and_ir<3>((B * previous_ir3) + ir0 * ir3, sf, lm);
+
+    push_colour();
+    return 13;
+}
+
+// Normal colour depth cue (triple)
+CycleCount GTE::ncdt(const u32 instruction)
+{
+    ncds(instruction, 0);
+    ncds(instruction, 1);
+    ncds(instruction, 2);
+    return 44;
+}
+
+// Normal colour colour (single)
+CycleCount GTE::nccs(const u32 instruction, const int n)
+{
+    const bool sf = get_shift_fraction(instruction);
+    const bool lm = get_limit(instruction);
+
+    multiply_vector_by_matrix(M(ll), A((n == 0 ? v0 : n == 1 ? v1 : v2)), sf, lm);
+    multiply_vector_by_matrix(M(lc), { ir1, ir2, ir3 }, sf, lm, { rbk, gbk, bbk });
+    multiply_vectors({ (i16)R, (i16)G, (i16)B }, { ir1, ir2, ir3 }, sf, lm);
+
+    push_colour();
+    return 17;
+}
+
+// Colour colour
+CycleCount GTE::cc(const u32 instruction)
+{
+    const bool sf = get_shift_fraction(instruction);
+    const bool lm = get_limit(instruction);
+
+    multiply_vector_by_matrix(M(lc), { ir1, ir2, ir3 }, sf, lm, { rbk, gbk, bbk });
+    multiply_vectors({ (i16)R, (i16)G, (i16)B }, { ir1, ir2, ir3 }, sf, lm);
+
+    push_colour();
+    return 11;
+}
+
+// Normal colour (single)
+CycleCount GTE::ncs(const u32 instruction, const int n)
+{
+    const bool sf = get_shift_fraction(instruction);
+    const bool lm = get_limit(instruction);
+    multiply_vector_by_matrix(M(ll), A((n == 0 ? v0 : n == 1 ? v1 : v2)), sf, lm);
+    multiply_vector_by_matrix(M(lc), { ir1, ir2, ir3 }, sf, lm, { rbk, gbk, bbk });
+    push_colour();
+    return 14;
+}
+
+// Normal colour (triple)
+CycleCount GTE::nct(const u32 instruction)
+{
+    ncs(instruction, 0);
+    ncs(instruction, 1);
+    ncs(instruction, 2);
+    return 30;
+}
+
+// Square vector
+CycleCount GTE::sqr(const u32 instruction)
+{
+    const bool sf = get_shift_fraction(instruction);
+    multiply_vectors( {ir1, ir2, ir3 }, { ir1, ir2, ir3 }, sf, false);
+    return 5;
+}
 
 // Depth cueing colour light
 CycleCount GTE::dcpl(const u32 instruction)
@@ -731,9 +822,62 @@ CycleCount GTE::dpct(const u32 instruction)
     return 17;
 }
 
-CycleCount GTE::avsz3(const u32 instruction) { dbg("TODO", dbg::hex(instruction & 0b111111)); exit(1); return 0; };
-CycleCount GTE::avsz4(const u32 instruction) { dbg("TODO", dbg::hex(instruction & 0b111111)); exit(1); return 0; };
-CycleCount GTE::rtpt(const u32 instruction) { dbg("TODO", dbg::hex(instruction & 0b111111)); exit(1); return 0; }
-CycleCount GTE::gpf(const u32 instruction) { dbg("TODO", dbg::hex(instruction & 0b111111)); exit(1); return 0; }
-CycleCount GTE::gpl(const u32 instruction) { dbg("TODO", dbg::hex(instruction & 0b111111)); exit(1); return 0; }
-CycleCount GTE::ncct(const u32 instruction) { dbg("TODO", dbg::hex(instruction & 0b111111)); exit(1); return 0; }
+// Average of three Z values
+CycleCount GTE::avsz3(const u32 instruction)
+{
+    (void)instruction;
+    int64_t result = set_mac0((i64)zsf3 * (sz[1] + sz[2] + sz[3]));
+    otz = (u16)clip((i32)(result >> 12), 0xFFFF, 0, FLAG_SZ3_OTZ_SATURATED);
+    return 5;
+}
+
+// Average of four Z values
+CycleCount GTE::avsz4(const u32 instruction)
+{
+    (void)instruction;
+    int64_t result = set_mac0((i64)zsf4 * (sz[0] + sz[1] + sz[2] + sz[3]));
+    otz = (u16)clip((i32)(result >> 12), 0xFFFF, 0, FLAG_SZ3_OTZ_SATURATED);
+    return 6;
+}
+
+// Perspective transformation (triple)
+CycleCount GTE::rtpt(const u32 instruction)
+{
+    rtps(instruction, 0, false);
+    rtps(instruction, 1, false);
+    rtps(instruction, 2, true);
+    return 23;
+}
+
+// General purpose interpolation
+CycleCount GTE::gpf(const u32 instruction)
+{
+    const bool sf = get_shift_fraction(instruction);
+    const bool lm = get_limit(instruction);
+    multiply_vectors({ ir0, ir0, ir0 }, { ir1, ir2, ir3 }, sf, lm);
+    push_colour();
+    return 5;
+}
+
+// General interpolation with base
+CycleCount GTE::gpl(const u32 instruction)
+{
+    const bool sf = get_shift_fraction(instruction);
+    const bool lm = get_limit(instruction);
+
+    set_mac_and_ir<1>(((i64)mac1 << (sf * 12)) + ir0 * ir1, sf, lm);
+    set_mac_and_ir<2>(((i64)mac2 << (sf * 12)) + ir0 * ir2, sf, lm);
+    set_mac_and_ir<3>(((i64)mac3 << (sf * 12)) + ir0 * ir3, sf, lm);
+
+    push_colour();
+    return 5;
+}
+
+// Normal colour colour (triple)
+CycleCount GTE::ncct(const u32 instruction)
+{
+    nccs(instruction, 0);
+    nccs(instruction, 1);
+    nccs(instruction, 2);
+    return 39;
+}

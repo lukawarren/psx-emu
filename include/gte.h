@@ -129,9 +129,9 @@ private:
     void multiply_vectors(
         const std::array<i16, 3> v1,
         const std::array<i16, 3> v2,
-        const std::array<i16, 3> tr,
+        const bool sf,
         const bool lm,
-        const bool sf
+        const std::array<i16, 3> tr = { 0, 0, 0 }
     );
 
     void multiply_vector_by_matrix(
@@ -142,18 +142,8 @@ private:
         const std::array<i32, 3> tr = { 0, 0, 0 }
     );
 
-    inline std::array<i16, 3> as_vector(const i16 x) const
-    {
-        return { x, x, x };
-    }
-
-    inline std::array<i16, 3> as_vector(const i16 x, const i16 y, const i16 z) const
-    {
-        return { x, y, z };
-    }
-
     // Instructions
-    CycleCount rtps (const u32 instruction);
+    CycleCount rtps (const u32 instruction, const int n = 0, const bool do_set_mac0 = true);
     CycleCount nclip(const u32 instruction);
     CycleCount op   (const u32 instruction);
     CycleCount dpcs (const u32 instruction, const bool force_rgb0 = false);
@@ -162,9 +152,9 @@ private:
     CycleCount ncds (const u32 instruction, const int n = 0);
     CycleCount cdp  (const u32 instruction);
     CycleCount ncdt (const u32 instruction);
-    CycleCount nccs (const u32 instruction);
+    CycleCount nccs (const u32 instruction, const int n = 0);
     CycleCount cc   (const u32 instruction);
-    CycleCount ncs  (const u32 instruction);
+    CycleCount ncs  (const u32 instruction, const int n = 0);
     CycleCount nct  (const u32 instruction);
     CycleCount sqr  (const u32 instruction);
     CycleCount dcpl (const u32 instruction);
