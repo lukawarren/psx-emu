@@ -36,9 +36,9 @@ private:
     i16 rt[3][3];       // Rotation matrix
     i32 tr[3];          // Translation vector
     i16 ll[3][3];       // Light source matrix
-    u32 rbk;            // Background colour (r, g, b)
-    u32 gbk;            // Background colour (r, g, b)
-    u32 bbk;            // Background colour (r, g, b)
+    i32 rbk;            // Background colour (r, g, b)
+    i32 gbk;            // Background colour (r, g, b)
+    i32 bbk;            // Background colour (r, g, b)
     i16 lc[3][3];       // Light colour matrix
     i32 rfc;            // Far colour (r, g, b)
     i32 gfc;            // Far colour (r, g, b)
@@ -105,20 +105,18 @@ private:
     i64 check_mac_overflow_and_extend(const i64 value);
 
     template <int i>
-    i64 set_mac(i64 value, const bool shift_fraction);
-
-    inline i64 set_mac0(const i64 value);
+    i64 set_mac(i64 value, const bool sf);
+    i64 set_mac0(const i64 value);
 
     template <int i>
-    void set_ir(const i32 value, const bool limit);
-
+    void set_ir(const i32 value, const bool lm);
     void set_ir0(const i32 value);
 
     template <int i>
     void set_mac_and_ir(
         const i64 value,
-        const bool shift_fraction,
-        const bool limit
+        const bool sf,
+        const bool lm
     );
 
     void push_screen_x_and_y(const i32 x, const i32 y);
@@ -128,6 +126,32 @@ private:
 
     u32 divide_unsigned_newton_raphson(u32 lhs, u32 rhs);
 
+    void multiply_vectors(
+        const std::array<i16, 3> v1,
+        const std::array<i16, 3> v2,
+        const std::array<i16, 3> tr,
+        const bool lm,
+        const bool sf
+    );
+
+    void multiply_vector_by_matrix(
+        const std::array<std::array<i16, 3>, 3> m,
+        const std::array<i16, 3> v,
+        const bool sf,
+        const bool lm,
+        const std::array<i32, 3> tr = { 0, 0, 0 }
+    );
+
+    inline std::array<i16, 3> as_vector(const i16 x) const
+    {
+        return { x, x, x };
+    }
+
+    inline std::array<i16, 3> as_vector(const i16 x, const i16 y, const i16 z) const
+    {
+        return { x, y, z };
+    }
+
     // Instructions
     CycleCount rtps (const u32 instruction);
     CycleCount nclip(const u32 instruction);
@@ -135,7 +159,7 @@ private:
     CycleCount dpcs (const u32 instruction, const bool force_rgb0 = false);
     CycleCount intpl(const u32 instruction);
     CycleCount mvmva(const u32 instruction);
-    CycleCount ncds (const u32 instruction);
+    CycleCount ncds (const u32 instruction, const int n = 0);
     CycleCount cdp  (const u32 instruction);
     CycleCount ncdt (const u32 instruction);
     CycleCount nccs (const u32 instruction);

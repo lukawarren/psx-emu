@@ -1,6 +1,11 @@
 #include "gte.h"
 
 #define CMOAE(i, value) check_mac_overflow_and_extend<i>(value)
+#define A(x) std::array<i16, 3> { x[0], x[1], x[2] }
+#define M(x) std::array<std::array<i16, 3>, 3> { A(x[0]), A(x[1]), A(x[2]) }
+#define R (rgbc[0] << 4)
+#define G (rgbc[1] << 4)
+#define B (rgbc[2] << 4)
 
 CycleCount GTE::execute(const u32 instruction)
 {
@@ -98,9 +103,9 @@ u32 GTE::read_register(const u32 reg)
         case 42: return ((u32)ll[1][2] << 16) | ((u32)ll[1][1] & 0xFFFF);
         case 43: return ((u32)ll[2][1] << 16) | ((u32)ll[2][0] & 0xFFFF);
         case 44: return (u32)(i32)(ll[2][2]);
-        case 45: return rbk;
-        case 46: return gbk;
-        case 47: return bbk;
+        case 45: return (u32)rbk;
+        case 46: return (u32)gbk;
+        case 47: return (u32)bbk;
         case 48: return ((u32)lc[0][1] << 16) | ((u32)lc[0][0] & 0xFFFF);
         case 49: return ((u32)lc[1][0] << 16) | ((u32)lc[0][2] & 0xFFFF);
         case 50: return ((u32)lc[1][2] << 16) | ((u32)lc[1][1] & 0xFFFF);
@@ -207,9 +212,9 @@ void GTE::write_register(const u32 reg, const u32 value)
         case 42: ll[1][1] = (i16)value; ll[1][2] = (i16)(u16)(value >> 16);           break;
         case 43: ll[2][0] = (i16)value; ll[2][1] = (i16)(u16)(value >> 16);           break;
         case 44: ll[2][2] = (i16)value;                                               break;
-        case 45: rbk = value;                                                         break;
-        case 46: gbk = value;                                                         break;
-        case 47: bbk = value;                                                         break;
+        case 45: rbk = (i32)value;                                                    break;
+        case 46: gbk = (i32)value;                                                    break;
+        case 47: bbk = (i32)value;                                                    break;
         case 48: lc[0][0] = (i16)value; lc[0][1] = (i16)(u16)(value >> 16);           break;
         case 49: lc[0][2] = (i16)value; lc[1][0] = (i16)(u16)(value >> 16);           break;
         case 50: lc[1][1] = (i16)value; lc[1][2] = (i16)(u16)(value >> 16);           break;
@@ -281,7 +286,7 @@ i64 GTE::check_mac_overflow_and_extend(const i64 value)
 }
 
 template <int i>
-i64 GTE::set_mac(i64 value, const bool shift_fraction)
+i64 GTE::set_mac(i64 value, const bool sf)
 {
     static_assert(i >= 1 && i <= 3);
 
@@ -294,7 +299,7 @@ i64 GTE::set_mac(i64 value, const bool shift_fraction)
         check_overflow<44>(value, FLAG_MAC3_OVERFLOW_POSITIVE, FLAG_MAC3_OVERFLOW_NEGATIVE);
 
     // Remove fractional part if need be
-    if (shift_fraction)
+    if (sf)
         value >>= 12;
 
     // Write to MAC register; return value written
@@ -313,7 +318,7 @@ inline i64 GTE::set_mac0(const i64 value)
 
 
 template <int i>
-void GTE::set_ir(const i32 value, const bool limit)
+void GTE::set_ir(const i32 value, const bool lm)
 {
     static_assert(i >= 1 && i <= 3);
 
@@ -322,7 +327,7 @@ void GTE::set_ir(const i32 value, const bool limit)
     if constexpr (i == 2) saturated_bits = FLAG_IR2_SATURATED;
     if constexpr (i == 3) saturated_bits = FLAG_IR3_SATURATED;
 
-    const i32 clipped = clip(value, 0x7fff, limit ? 0 : -0x8000, saturated_bits);
+    const i32 clipped = clip(value, 0x7fff, lm ? 0 : -0x8000, saturated_bits);
     if constexpr (i == 1) ir1 = (i16)clipped;
     if constexpr (i == 2) ir2 = (i16)clipped;
     if constexpr (i == 3) ir3 = (i16)clipped;
@@ -334,9 +339,9 @@ void GTE::set_ir0(const i32 value)
 }
 
 template <int i>
-void GTE::set_mac_and_ir(const i64 value, const bool shift_fraction, const bool limit)
+void GTE::set_mac_and_ir(const i64 value, const bool sf, const bool lm)
 {
-    set_ir<i>((i32)set_mac<i>(value, shift_fraction), limit);
+    set_ir<i>((i32)set_mac<i>(value, sf), lm);
 }
 
 void GTE::push_screen_x_and_y(const i32 x, const i32 y)
@@ -416,6 +421,36 @@ u32 GTE::divide_unsigned_newton_raphson(u32 lhs, u32 rhs)
     }
 }
 
+void GTE::multiply_vectors(
+    const std::array<i16, 3> v1,
+    const std::array<i16, 3> v2,
+    const std::array<i16, 3> tr,
+    const bool sf,
+    const bool lm
+)
+{
+    set_mac_and_ir<1>(((i64)tr[0] << 12) + v1[0] * v2[0], sf, lm);
+    set_mac_and_ir<2>(((i64)tr[1] << 12) + v1[1] * v2[1], sf, lm);
+    set_mac_and_ir<3>(((i64)tr[2] << 12) + v1[2] * v2[2], sf, lm);
+}
+
+void GTE::multiply_vector_by_matrix(
+    const std::array<std::array<i16, 3>, 3> m,
+    const std::array<i16, 3> v,
+    const bool sf,
+    const bool lm,
+    const std::array<i32, 3> tr
+) {
+    i64 result[3];
+    result[0] = CMOAE(1, CMOAE(1, CMOAE(1, ((int64_t)tr[0] << 12) + m[0][0] * v[0]) + m[0][1] * v[1]) + m[0][2] * v[2]);
+    result[1] = CMOAE(2, CMOAE(2, CMOAE(2, ((int64_t)tr[1] << 12) + m[1][0] * v[0]) + m[1][1] * v[1]) + m[1][2] * v[2]);
+    result[2] = CMOAE(3, CMOAE(3, CMOAE(3, ((int64_t)tr[2] << 12) + m[2][0] * v[0]) + m[2][1] * v[1]) + m[2][2] * v[2]);
+
+    set_mac_and_ir<1>(result[0], sf, lm);
+    set_mac_and_ir<2>(result[1], sf, lm);
+    set_mac_and_ir<3>(result[2], sf, lm);
+}
+
 // Perspective transformation (single)
 CycleCount GTE::rtps(const u32 instruction)
 {
@@ -490,20 +525,23 @@ CycleCount GTE::dpcs(const u32 instruction, const bool force_rgb0)
     const bool sf = get_shift_fraction(instruction);
     const bool lm = get_limit(instruction);
 
-    const i16 r = force_rgb0 ? (i16)((rgb[0] >>  0) & 0xFF) : (i16)(rgbc[0] << 4);
-    const i16 g = force_rgb0 ? (i16)((rgb[0] >>  8) & 0xFF) : (i16)(rgbc[1] << 4);
-    const i16 b = force_rgb0 ? (i16)((rgb[0] >> 16) & 0xFF) : (i16)(rgbc[2] << 4);
+    const i16 r = force_rgb0 ? (i16)((rgb[0] >>  0) & 0xFF) : (i16)R;
+    const i16 g = force_rgb0 ? (i16)((rgb[0] >>  8) & 0xFF) : (i16)G;
+    const i16 b = force_rgb0 ? (i16)((rgb[0] >> 16) & 0xFF) : (i16)B;
 
     set_mac_and_ir<1>(((i64)rfc << 12) - ((i64)r << 12), sf, false);
     set_mac_and_ir<2>(((i64)gfc << 12) - ((i64)g << 12), sf, false);
     set_mac_and_ir<3>(((i64)bfc << 12) - ((i64)b << 12), sf, false);
 
-    set_mac_and_ir<1>(((i64)r << 12) + (i64)ir0 * ir1, sf, lm);
-    set_mac_and_ir<2>(((i64)g << 12) + (i64)ir0 * ir2, sf, lm);
-    set_mac_and_ir<3>(((i64)b << 12) + (i64)ir0 * ir3, sf, lm);
+    multiply_vectors(
+        as_vector(ir0),
+        as_vector(ir1, ir2, ir3),
+        as_vector(r, g, b),
+        sf,
+        lm
+    );
 
     push_colour();
-
     return 8;
 }
 
@@ -521,9 +559,13 @@ CycleCount GTE::intpl(const u32 instruction)
     set_mac_and_ir<2>(((i64)gfc << 12) - ((i64)previous_ir2 << 12), sf, false);
     set_mac_and_ir<3>(((i64)bfc << 12) - ((i64)previous_ir3 << 12), sf, false);
 
-    set_mac_and_ir<1>(((i64)previous_ir1 << 12) + (i64)ir0 * ir1, sf, lm);
-    set_mac_and_ir<2>(((i64)previous_ir2 << 12) + (i64)ir0 * ir2, sf, lm);
-    set_mac_and_ir<3>(((i64)previous_ir3 << 12) + (i64)ir0 * ir3, sf, lm);
+    multiply_vectors(
+        as_vector(ir0),
+        as_vector(ir1, ir2, ir3),
+        as_vector(previous_ir1, previous_ir2, previous_ir3),
+        sf,
+        lm
+    );
 
     push_colour();
     return 8;
@@ -543,8 +585,8 @@ CycleCount GTE::mvmva(const u32 instruction)
         case 1: memcpy(mx, ll, sizeof(mx)); break;
         case 2: memcpy(mx, lc, sizeof(mx)); break;
         case 3:
-            mx[0][0] = -(i16)(rgbc[0] << 4);
-            mx[0][1] =  (i16)(rgbc[0] << 4);
+            mx[0][0] = (i16)-R;
+            mx[0][1] = R;
             mx[0][2] = ir0;
             mx[1][0] = mx[1][1] = mx[1][2] = rt[0][2];
             mx[2][0] = mx[2][1] = mx[2][2] = rt[1][1];
@@ -609,7 +651,43 @@ CycleCount GTE::mvmva(const u32 instruction)
     return 8;
 }
 
-CycleCount GTE::ncds(const u32 instruction) { dbg("TODO", dbg::hex(instruction & 0b111111)); exit(1); return 0; }
+// Normal colour depth cue (single)
+CycleCount GTE::ncds(const u32 instruction, const int n)
+{
+    const bool sf = get_shift_fraction(instruction);
+    const bool lm = get_limit(instruction);
+
+    multiply_vector_by_matrix(
+        M(ll),
+        A((n == 0 ? v0 : n == 1 ? v1 : v2)),
+        sf,
+        lm
+    );
+
+    multiply_vector_by_matrix(
+        M(lc),
+        { ir1, ir2, ir3 },
+        sf,
+        lm,
+        { rbk, gbk, bbk }
+    );
+
+    const i16 previous_ir1 = ir1;
+    const i16 previous_ir2 = ir2;
+    const i16 previous_ir3 = ir3;
+
+    set_mac_and_ir<1>(((i64)rfc << 12) - (R * ir1), sf, false);
+    set_mac_and_ir<2>(((i64)gfc << 12) - (G * ir2), sf, false);
+    set_mac_and_ir<3>(((i64)bfc << 12) - (B * ir3), sf, false);
+
+    set_mac_and_ir<1>((R * previous_ir1) + ir0 * ir1, sf, lm);
+    set_mac_and_ir<2>((G * previous_ir2) + ir0 * ir2, sf, lm);
+    set_mac_and_ir<3>((B * previous_ir3) + ir0 * ir3, sf, lm);
+
+    push_colour();
+    return 19;
+}
+
 CycleCount GTE::cdp(const u32 instruction) { dbg("TODO", dbg::hex(instruction & 0b111111)); exit(1); return 0; }
 CycleCount GTE::ncdt(const u32 instruction) { dbg("TODO", dbg::hex(instruction & 0b111111)); exit(1); return 0; }
 CycleCount GTE::nccs(const u32 instruction) { dbg("TODO", dbg::hex(instruction & 0b111111)); exit(1); return 0; }
