@@ -57,6 +57,20 @@ private:
     FIFO commands_fifo = {};
     FIFO parameters_fifo = {};
 
+    struct SeekLocation
+    {
+        u8 min;
+        u8 sec;
+        u8 frame;
+    } seek_target, seek_data;
+
+    // Some commands can send several responses
+    enum class SecondResponse
+    {
+        None,
+        GetID,
+        SeekL
+    } second_response;
+
     bool shell_open = true;
-    bool get_id_was_called = false;
 };

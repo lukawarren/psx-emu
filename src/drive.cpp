@@ -8,19 +8,7 @@ Drive::Drive()
 
 bool Drive::clock()
 {
-    // Check for pending interrupt
-    if ((hintmsk & hintsts) != 0)
-        return true;
-
-    if (commands_fifo.is_empty())
-        return false;
-
-    // Interrupts are queued; don't raise until the last one was acknowledged
-    // if ((hintsts & 0b11111) != 0)
-    //     return false;
-
-    const u8 command = commands_fifo.pop();
-
+    const auto int2 = [&]() { hintsts = (hintsts & 0b11111000) | (u8)InterruptType::Complete; };
     const auto int3 = [&]() { hintsts = (hintsts & 0b11111000) | (u8)InterruptType::Acknowledge; };
     const auto int5 = [&]() { hintsts = (hintsts & 0b11111000) | (u8)InterruptType::DiskError; };
     const auto stat = [&]() -> u8
@@ -28,6 +16,46 @@ bool Drive::clock()
         // Motor on; bit 4 is shell open
         return 0b10 | ((u8)shell_open << 4);
     };
+    const auto int3_stat = [&]()
+    {
+        results_fifo.push(stat());
+        int3();
+    };
+
+    // Check for pending interrupt
+    if ((hintmsk & hintsts) != 0)
+        return true;
+
+    if (second_response == SecondResponse::GetID)
+    {
+        // Return licensed string (America / NTSC)
+        results_fifo.push(0x02);
+        results_fifo.push(0x00);
+        results_fifo.push(0x20);
+        results_fifo.push(0x00);
+        results_fifo.push('S');
+        results_fifo.push('C');
+        results_fifo.push('E');
+        results_fifo.push('A');
+        int2();
+    }
+    else if (second_response == SecondResponse::SeekL)
+    {
+        dbg("stop any reading or pending ReadN or ReadS");
+        results_fifo.push(stat());
+        int2();
+    }
+
+    if (second_response != SecondResponse::None)
+    {
+        second_response = SecondResponse::None;
+        return false;
+    }
+
+    if (commands_fifo.is_empty())
+        return false;
+
+    const u8 command = commands_fifo.pop();
 
     switch (command)
     {
@@ -40,9 +68,40 @@ bool Drive::clock()
 
         case 0x01:
             // NOP - resets shell open status
-            results_fifo.push(stat());
             shell_open = false;
-            int3();
+            int3_stat();
+            break;
+
+        case 0x02:
+            // SetLoc
+            seek_target.min = parameters_fifo.pop();
+            seek_target.sec = parameters_fifo.pop();
+            seek_target.frame = parameters_fifo.pop();
+            int3_stat();
+            break;
+
+        case 0x06:
+            // ReadN
+            dbg("TODO: read");
+            exit(1);
+            break;
+
+        case 0x0E:
+        {
+            // Setmode
+            const u8 mode = parameters_fifo.pop();
+            dbg("TODO: setmode (including sector size)", dbg::bin(mode));
+            if ((mode & 0b10) != 0) dbg("TODO: auto-pause");
+            if ((mode & 0b10000) != 0) dbg("TODO: ignore bit");
+            int3_stat();
+            break;
+        }
+
+        case 0x15:
+            // SeekL
+            seek_data = seek_target;
+            second_response = SecondResponse::SeekL;
+            int3_stat();
             break;
 
         case 0x19:
@@ -53,36 +112,18 @@ bool Drive::clock()
 
             // 0x20: Get CDROM BIOS date / version
             results_fifo.push(94);  // Year
-            results_fifo.push(12);  // Month
-            results_fifo.push(3);   // Day
-            results_fifo.push(1);   // Version
+            results_fifo.push(9);   // Month
+            results_fifo.push(25);  // Day
+            results_fifo.push(192); // Version
             int3();
             break;
         }
 
         case 0x1A:
         {
-            // GetID
-            if (!get_id_was_called)
-            {
-                // Signal that we're licensed
-                results_fifo.push(stat());
-                int3();
-            }
-            else
-            {
-                // Return licensed string (America / NTSC)
-                results_fifo.push(0x02);
-                results_fifo.push(0x00);
-                results_fifo.push(0x20);
-                results_fifo.push(0x00);
-                results_fifo.push('S');
-                results_fifo.push('C');
-                results_fifo.push('E');
-                results_fifo.push('A');
-                int5();
-            }
-            get_id_was_called = !get_id_was_called;
+            // GetID; signal that we're licensed
+            int3_stat();
+            second_response = SecondResponse::GetID;
             break;
         }
 
