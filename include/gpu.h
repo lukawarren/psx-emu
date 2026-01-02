@@ -100,17 +100,12 @@ private:
         u16 height;
     } gp0_rectangle;
 
-    // GP0 0xE1 settings
+    // GP0 0xE1 settings ("texpage")
     u8 texture_page_x_base;
     u8 texture_page_y_base_1;
     u8 texture_page_y_base_2;
     u8 semi_transparency_mode;
-    enum class TexturePageColours
-    {
-        FourBit,
-        EightBit,
-        FifteenBit
-    } texture_page_colours;
+    Renderer::ColourDepth colour_depth;
     bool dither_24_bit_to_15_bit;
     bool draw_to_display_area;
     bool textured_rectangle_x_flip;

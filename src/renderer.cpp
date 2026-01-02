@@ -1,6 +1,14 @@
 #include "renderer.h"
 #include "gpu.h"
 
+Renderer::Renderer()
+{
+    dbg("TODO: texture flipping (X and Y) for triangles");
+    dbg("TODO: abstract getting colour from texel");
+    dbg("TODO: texel_mask and is_transparent for 15-bit triangle?");
+    dbg("TODO: texture_window_offset_*, texture_window_mask_*");
+}
+
 void Renderer::blit(const GPU& gpu, const u32 x, const u32 y, const u16 pixel)
 {
     // Wrap around
@@ -20,9 +28,13 @@ void Renderer::push(const GPU& gpu, const Triangle& polygon)
         v[i].y += (i32)gpu.drawing_offset_y;
     }
 
-    // Parse texpage (other fields are taken from GP0 0xE1)
+    // Parse texpage (takes precedence over GP0 0xE1)
     const u32 texture_base_page_x = (polygon.texture_page & 0b1111) * 64;
     const u32 texture_base_page_y = ((polygon.texture_page >> 4) & 0b1) * 256;
+    const u8 semi_transparency_mode = polygon.is_textured ?
+        ((polygon.texture_page >> 5) & 0b11) : gpu.semi_transparency_mode;
+    const ColourDepth colour_depth = polygon.is_textured ?
+        (ColourDepth)((polygon.texture_page >> 7) & 0b11) : gpu.colour_depth;
 
     // Parse CLUT
     const u32 clut_x = (polygon.clut & 0b111111) * 16;
@@ -114,75 +126,32 @@ void Renderer::push(const GPU& gpu, const Triangle& polygon)
                 {
                     // Max texture size is 256 so u8 will wrap for us
                     // TODO: texture flip x and y
-                    u8 u = (u8)std::round(w0 * du0 + w1 * du1 + w2 * du2);
-                    u8 v = (u8)std::round(w0 * dv0 + w1 * dv1 + w2 * dv2);
+                    const u8 u = (u8)std::round(w0 * du0 + w1 * du1 + w2 * du2);
+                    const u8 v = (u8)std::round(w0 * dv0 + w1 * dv1 + w2 * dv2);
 
-                    u8 texel_r, texel_g, texel_b;
-                    bool texel_mask;
-                    bool is_transparent;
-                    bool skip = false;
+                    // Sample texture
+                    const u16 texel = sample_texel(
+                        colour_depth,
+                        texture_base_page_x,
+                        texture_base_page_y,
+                        clut_x,
+                        clut_y,
+                        u,
+                        v
+                    );
 
-                    // Sample texel
-                    if (gpu.texture_page_colours == GPU::TexturePageColours::FourBit)
+                    // Colour 0 is fully transparent
+                    if (texel != 0)
                     {
-                        // 4-bit: 4 pixels per 16-bit word
-                        const u32 tex_x = (texture_base_page_x + (u / 4)) % vram_width;
-                        const u32 tex_y = (texture_base_page_y + v) % vram_height;
-                        const u16 texel_word = vram[tex_y * vram_width + tex_x];
+                        // Convert from 5 bits per channel to 8
+                        const u8 texel_r = (u8)(((texel >> 0) & 0b11111) << 3);
+                        const u8 texel_g = (u8)(((texel >> 5) & 0b11111) << 3);
+                        const u8 texel_b = (u8)(((texel >> 10) & 0b11111) << 3);
+                        const bool is_transparent = (texel >> 15) != 0;
 
-                        // Extract 4-bit index (0-15)
-                        const u32 pixel_in_word = u % 4;
-                        const u8 clut_index = (u8)(texel_word >> (pixel_in_word * 4)) & 0xF;
-
-                        // Look up color in CLUT
-                        const u16 texel = vram[clut_y * vram_width + clut_x + clut_index];
-                        texel_r = ((texel >> 0) & 0b11111) * 8;
-                        texel_g = ((texel >> 5) & 0b11111) * 8;
-                        texel_b = ((texel >> 10) & 0b11111) * 8;
-                        texel_mask = (texel >> 15) != 0;
-                        is_transparent = (texel >> 15) != 0;
-
-                        // Colour 0 is fully transparrent
-                        if (texel == 0)
-                            skip = true;
-                    }
-                    else if (gpu.texture_page_colours == GPU::TexturePageColours::EightBit)
-                    {
-                        // 8-bit: 2 pixels per 16-bit word
-                        const u32 tex_x = (texture_base_page_x + (u / 2)) % vram_width;
-                        const u32 tex_y = (texture_base_page_y + v) % vram_height;
-                        const u16 texel_word = vram[tex_y * vram_width + tex_x];
-
-                        // Extract 8-bit index (0-255)
-                        const u32 pixel_in_word = u % 2;
-                        const u8 clut_index = (u8)(texel_word >> (pixel_in_word * 8)) & 0xFF;
-
-                        // Look up color in CLUT
-                        const u16 texel = vram[clut_y * vram_width + clut_x + clut_index];
-                        texel_r = ((texel >> 0) & 0b11111) * 8;
-                        texel_g = ((texel >> 5) & 0b11111) * 8;
-                        texel_b = ((texel >> 10) & 0b11111) * 8;
-                        texel_mask = (texel >> 15) != 0;
-                        is_transparent = (texel >> 15) != 0;
-
-                        // Colour 0 is fully transparrent
-                        if (texel == 0)
-                            skip = true;
-                    }
-                    else
-                    {
-                        // 15-bit
-                        const u32 tex_x = (texture_base_page_x + u) % vram_width;
-                        const u32 tex_y = (texture_base_page_y + v) % vram_height;
-                        const u16 texel = vram[tex_y * vram_width + tex_x];
-                        unpack_colour(texel, texel_r, texel_g, texel_b);
-                    }
-
-                    if (!skip)
-                    {
                         if (polygon.use_raw_texture)
                         {
-                            write_with_masking(pixel_ptr, texel_r, texel_g, texel_b, texel_mask, gpu);
+                            write_with_masking(pixel_ptr, texel_r, texel_g, texel_b, is_transparent, gpu);
                         }
                         else
                         {
@@ -191,10 +160,18 @@ void Renderer::push(const GPU& gpu, const Triangle& polygon)
                             const u8 g = (u8)(((u32)(w0 * dg0 + w1 * dg1 + w2 * dg2) * texel_g) >> 7);
                             const u8 b = (u8)(((u32)(w0 * db0 + w1 * db1 + w2 * db2) * texel_b) >> 7);
 
-                            if (gpu.texture_page_colours != GPU::TexturePageColours::FifteenBit && is_transparent)
-                                write_with_transparency_and_masking(pixel_ptr, r, g, b, texel_mask, gpu);
+                            if (is_transparent)
+                                write_with_transparency_and_masking(
+                                    pixel_ptr,
+                                    r,
+                                    g,
+                                    b,
+                                    is_transparent,
+                                    semi_transparency_mode,
+                                    gpu
+                                );
                             else
-                                write_with_masking(pixel_ptr, r, g, b, texel_mask, gpu);
+                                write_with_masking(pixel_ptr, r, g, b, is_transparent, gpu);
                         }
                     }
                 }
@@ -204,7 +181,15 @@ void Renderer::push(const GPU& gpu, const Triangle& polygon)
                     const u8 g = (u8)(w0 * dg0 + w1 * dg1 + w2 * dg2);
                     const u8 b = (u8)(w0 * db0 + w1 * db1 + w2 * db2);
                     if (polygon.is_transparent)
-                        write_with_transparency_and_masking(pixel_ptr, r, g, b, false, gpu);
+                        write_with_transparency_and_masking(
+                            pixel_ptr,
+                            r,
+                            g,
+                            b,
+                            false,
+                            gpu.semi_transparency_mode,
+                            gpu
+                        );
                     else
                         write_with_masking(pixel_ptr, r, g, b, false, gpu);
                 }
@@ -253,29 +238,24 @@ void Renderer::push(const GPU& gpu, const Rectangle& rectangle)
 
     if (rectangle.is_textured)
     {
-        // Parse UV
-        const u32 colour_lookup_table = rectangle.uv >> 16;
+        // Parse UV and CLUT
+        const u32 clut = rectangle.uv >> 16;
+        const u32 clut_x = (clut & 0b111111) * 16;
+        const u32 clut_y = (clut >> 6) & 0b111111111;
         const u32 u = rectangle.uv & 0xff;
         const u32 v = (rectangle.uv >> 8) & 0xff;
 
-        // Get texture settings from GPU
+        // Get texture settings from GPU (no texpage)
         const u32 texture_base_page_x = gpu.texture_page_x_base * 64;
         const u32 texture_base_page_y = gpu.texture_page_y_base_1 * 256;
-        if (gpu.texture_page_colours != GPU::TexturePageColours::FifteenBit)
-        {
-            dbg("TODO: non-15-bit colour for rectangle");
-            (void)colour_lookup_table;
-            exit(1);
-        }
 
         for (u32 y = 0; y < rectangle.height; y++)
         {
             for (u32 x = 0; x < rectangle.width; x++)
             {
+                // Texture flipping
                 u32 offset_x = x;
                 u32 offset_y = y;
-
-                // Texture flipping
                 if (gpu.textured_rectangle_x_flip) offset_x = rectangle.width - 1 - x;
                 if (gpu.textured_rectangle_y_flip) offset_y = rectangle.height - 1 - y;
 
@@ -283,11 +263,19 @@ void Renderer::push(const GPU& gpu, const Rectangle& rectangle)
                 offset_x %= 256;
                 offset_y %= 256;
 
-                const u32 tex_x = (texture_base_page_x + u + offset_x) % vram_width;
-                const u32 tex_y = (texture_base_page_y + v + offset_y) % vram_height;
-
                 // Sample texture from VRAM
-                const u16 texel = vram[tex_y * vram_width + tex_x];
+                const u16 texel = sample_texel(
+                    gpu.colour_depth,
+                    texture_base_page_x,
+                    texture_base_page_y,
+                    clut_x,
+                    clut_y,
+                    offset_x + u,
+                    offset_y + v
+                );
+
+                // Colour 0 is fully transparent
+                if (texel == 0) continue;
 
                 // Write to destination
                 const u32 dst_x = x0 + x;
@@ -302,7 +290,15 @@ void Renderer::push(const GPU& gpu, const Rectangle& rectangle)
                         const u8 g = ((u8)(texel >> 5) & 0b11111) << 3;
                         const u8 b = ((u8)(texel >> 10) & 0b11111) << 3;
                         const bool mask = (texel >> 15) != 0;
-                        write_with_transparency_and_masking(pixel, r, g, b, mask, gpu);
+                        write_with_transparency_and_masking(
+                            pixel,
+                            r,
+                            g,
+                            b,
+                            mask,
+                            gpu.semi_transparency_mode,
+                            gpu
+                        );
                     }
                     else
                         write_with_masking(pixel, texel, gpu);
@@ -323,7 +319,15 @@ void Renderer::push(const GPU& gpu, const Rectangle& rectangle)
                 u16* pixel = &vram[(y0 + y) * vram_width + x0 + x];
 
                 if (rectangle.is_transparent && gpu.semi_transparency_mode)
-                    write_with_transparency_and_masking(pixel, r, g, b, false, gpu);
+                    write_with_transparency_and_masking(
+                        pixel,
+                        r,
+                        g,
+                        b,
+                        false,
+                        gpu.semi_transparency_mode,
+                        gpu
+                    );
                 else
                     write_with_masking(pixel, colour, gpu);
             }
@@ -387,7 +391,14 @@ void Renderer::write_with_masking(u16* original, const u16 pixel, const GPU& gpu
         *original = pixel;
 }
 
-void Renderer::write_with_masking(u16* original, const u8 r, const u8 g, const u8 b, const bool mask, const GPU& gpu) const
+void Renderer::write_with_masking(
+    u16* original,
+    const u8 r,
+    const u8 g,
+    const u8 b,
+    const bool mask,
+    const GPU& gpu
+) const
 {
     if (gpu.check_mask_before_draw && is_mask_bit_set(*original))
         return;
@@ -398,7 +409,15 @@ void Renderer::write_with_masking(u16* original, const u8 r, const u8 g, const u
         *original = pack_colour(r, g, b, mask);
 }
 
-void Renderer::write_with_transparency_and_masking(u16* original, const u8 r, const u8 g, const u8 b, const bool mask, const GPU& gpu) const
+void Renderer::write_with_transparency_and_masking(
+    u16* original,
+    const u8 r,
+    const u8 g,
+    const u8 b,
+    const bool mask,
+    const u8 semi_transparency_mode,
+    const GPU& gpu
+) const
 {
     // Read old 5-bit channels, convert to 8-bit
     u8 old_r, old_g, old_b, old_mask;
@@ -411,7 +430,7 @@ void Renderer::write_with_transparency_and_masking(u16* original, const u8 r, co
         return;
 
     u8 new_r, new_g, new_b;
-    switch (gpu.semi_transparency_mode)
+    switch (semi_transparency_mode)
     {
         case 0:
             new_r = (u8)std::min((u16)(old_r >> 1) + (u16)(r >> 1), 255);
@@ -442,4 +461,50 @@ void Renderer::write_with_transparency_and_masking(u16* original, const u8 r, co
         *original = pack_colour(new_r, new_g, new_b, true);
     else
         *original = pack_colour(new_r, new_g, new_b, mask);
+}
+
+u16 Renderer::sample_texel(
+    const ColourDepth colour_depth,
+    const u32 texture_base_page_x,
+    const u32 texture_base_page_y,
+    const u32 clut_x,
+    const u32 clut_y,
+    const u32 u,
+    const u32 v
+)
+{
+    if (colour_depth == ColourDepth::FourBit)
+    {
+        // 4-bit: 4 pixels per 16-bit word
+        const u32 tex_x = (texture_base_page_x + (u / 4)) % vram_width;
+        const u32 tex_y = (texture_base_page_y + v) % vram_height;
+        const u16 texel_word = vram[tex_y * vram_width + tex_x];
+
+        // Extract 4-bit index (0-15)
+        const u32 pixel_in_word = u % 4;
+        const u8 clut_index = (u8)(texel_word >> (pixel_in_word * 4)) & 0xF;
+
+        // Look up color in CLUT
+        return vram[clut_y * vram_width + clut_x + clut_index];
+    }
+    else if (colour_depth == ColourDepth::EightBit)
+    {
+        // 8-bit: 2 pixels per 16-bit word
+        const u32 tex_x = (texture_base_page_x + (u / 2)) % vram_width;
+        const u32 tex_y = (texture_base_page_y + v) % vram_height;
+        const u16 texel_word = vram[tex_y * vram_width + tex_x];
+
+        // Extract 8-bit index (0-255)
+        const u32 pixel_in_word = u % 2;
+        const u8 clut_index = (u8)(texel_word >> (pixel_in_word * 8)) & 0xFF;
+
+        return vram[clut_y * vram_width + clut_x + clut_index];
+    }
+    else
+    {
+        // 15-bit; no CLUT
+        const u32 tex_x = (texture_base_page_x + u) % vram_width;
+        const u32 tex_y = (texture_base_page_y + v) % vram_height;
+        return vram[tex_y * vram_width + tex_x];
+    }
 }

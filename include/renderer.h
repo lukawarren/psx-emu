@@ -55,6 +55,14 @@ public:
         u16 height;
     } gp0_rectangle;
 
+    enum class ColourDepth
+    {
+        FourBit,
+        EightBit,
+        FifteenBit
+    };
+
+    Renderer();
     void blit(const GPU& gpu, const u32 x, const u32 y, const u16 pixel);
     void push(const GPU& gpu, const Triangle& polygon);
     void push(const QuickRectangle& rectangle);
@@ -122,7 +130,25 @@ private:
 
     void write_with_masking(u16* original, const u16 pixel, const GPU& gpu) const;
     void write_with_masking(u16* original, const u8 r, const u8 g, const u8 b, const bool mask, const GPU& gpu) const;
-    void write_with_transparency_and_masking(u16* original, const u8 r, const u8 g, const u8 b, const bool mask, const GPU& gpu) const;
+    void write_with_transparency_and_masking(
+        u16* original,
+        const u8 r,
+        const u8 g,
+        const u8 b,
+        const bool mask,
+        const u8 semi_transparency_mode,
+        const GPU& gpu
+    ) const;
+
+    u16 sample_texel(
+        const ColourDepth colour_depth,
+        const u32 texture_base_page_x,
+        const u32 texture_base_page_y,
+        const u32 clut_x,
+        const u32 clut_y,
+        const u32 u,
+        const u32 v
+    );
 
     // Laid out as 512 lines of 2048 bytes each
     // i.e 1024x512 16-bit pixels

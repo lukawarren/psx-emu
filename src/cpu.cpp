@@ -3,7 +3,7 @@
 
 #define ENABLE_TRACE 0
 #define ENABLE_SERIAL 1
-#define SIDELOAD_EXE 1
+#define SIDELOAD_EXE 0
 
 CPU::CPU() : bus(*this, "../SCPH1001.bin")
 {
@@ -57,7 +57,8 @@ void CPU::clock()
         // bus.sideload_exe("../tests/gpu/animated-triangle/animated-triangle.exe");
         // bus.sideload_exe("../tests/gte/test-all/test-all.exe");
         // bus.sideload_exe("../tests/psxtest_cpu.exe");
-        bus.sideload_exe("../tests/cube.exe");
+        // bus.sideload_exe("../tests/cube.exe");
+        bus.sideload_exe("../tests/fonts.exe");
     }
 #endif
 

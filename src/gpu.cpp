@@ -21,7 +21,7 @@ u32 GPU::get_gpu_stat()
     value |= u32(texture_page_x_base & 0b1111) << 0;
     value |= u32(texture_page_y_base_1 & 0b1) << 4;
     value |= u32(semi_transparency_mode & 0b11) << 5;
-    value |= u32((u32)texture_page_colours & 0b11) << 7;
+    value |= u32((u32)colour_depth & 0b11) << 7;
     value |= u32(dither_24_bit_to_15_bit & 0b1) << 9;
     value |= u32(texture_page_y_base_2 & 0b1) << 15;
 
@@ -280,7 +280,7 @@ void GPU::send_gp0_command(const u32 opcode)
         texture_page_x_base = ((opcode >> 0) & 0b1111);
         texture_page_y_base_1 = ((opcode >> 4) & 0b1);
         semi_transparency_mode = ((opcode >> 5) & 0b11);
-        texture_page_colours = (TexturePageColours)((opcode >> 7) & 0b11);
+        colour_depth = (Renderer::ColourDepth)((opcode >> 7) & 0b11);
         dither_24_bit_to_15_bit = ((opcode >> 9) & 0b1);
         draw_to_display_area = ((opcode >> 10) & 0b1);
         texture_page_y_base_2 = ((opcode >> 11) & 0b1);
@@ -420,7 +420,7 @@ void GPU::send_gp1_command(const u32 opcode)
         texture_page_y_base_1 = 0;
         texture_page_y_base_2 = 0;
         semi_transparency_mode = 0;
-        texture_page_colours = TexturePageColours::FourBit;
+        colour_depth = Renderer::ColourDepth::FourBit;
         dither_24_bit_to_15_bit = 0;
         draw_to_display_area = 1;
         textured_rectangle_x_flip = 0;
