@@ -17,7 +17,8 @@ void Bus::clock()
 
     // TOOD: abstract
 
-    drive.clock();
+    if (drive.clock())
+        fire_interrupt(Interrupt::CDROM);
 
     if (get_dma_master_enable(2) && DMAChannelControl::transfer_due(dma_channel_control_channel_2))
     {
@@ -189,12 +190,8 @@ u8 Bus::read_u8(const u32 address)
     if (WITHIN(0x1F801800, 4))
         return drive.read(physical_address - 0x1F801800);
 
-    // Serial something or other
-    if (address == 0x1F801040) return 0;
-    if (address == 0x1F80104A) return 0;
-
     dbg("TODO: unknown bus read", dbg::hex(address), dbg::hex(physical_address));
-    exit(1);
+    return 0xff;
 }
 
 u16 Bus::read_u16(const u32 address)
@@ -203,16 +200,12 @@ u16 Bus::read_u16(const u32 address)
     if (u8* ptr = get_bank_address(physical_address))
         return (u32)ptr[0] | ((u32)ptr[1] << 8);
 
-    // Serial something or other
-    if (address == 0x1F801040) return 0;
-    if (address == 0x1F80104A) return 0;
-
     // I/O
     if (WITHIN(0x1F801000, 4096) || address == 0xFFFE0130)
         return io_read_u16(physical_address);
 
     dbg("TODO: unknown bus read", dbg::hex(address), dbg::hex(physical_address));
-    exit(1);
+    return 0xff;
 }
 
 u32 Bus::read_u32(const u32 address)
@@ -221,16 +214,12 @@ u32 Bus::read_u32(const u32 address)
     if (u8* ptr = get_bank_address(physical_address))
         return (u32)ptr[0] | ((u32)ptr[1] << 8) | ((u32)ptr[2] << 16) | ((u32)ptr[3] << 24);
 
-    // Serial something or other
-    if (address == 0x1F801040) return 0;
-    if (address == 0x1F80104A) return 0;
-
     // I/O
     if (WITHIN(0x1F801000, 4096) || address == 0xFFFE0130)
         return io_read_u32(physical_address);
 
     dbg("TODO: unknown bus read", dbg::hex(address), dbg::hex(physical_address));
-    exit(1);
+    return 0xff;
 }
 
 void Bus::write_u8(const u32 address, const u8 value)
@@ -271,7 +260,6 @@ void Bus::write_u8(const u32 address, const u8 value)
     }
 
     dbg("TODO: unknown bus write", dbg::hex(address), dbg::hex(value));
-    exit(1);
 }
 
 void Bus::write_u16(const u32 address, const u16 value)
@@ -318,18 +306,18 @@ u16 Bus::io_read_u16(const u32 address)
 
     // SPU voice registers
     if (address >= 0x1F801C00 && address <= 0x1F801D7E)
-        return 0;
+        return 0xff;
 
     // SPU control registers
     if (address >= 0x1F801D80 && address <= 0x1F801DBC)
-        return 0;
+        return 0xff;
 
     // SPU reverb configuration area - NOTE: should be DFC, not DFE?
     if (address >= 0x1F801DC0 && address <= 0x1F801DFE)
-        return 0;
+        return 0xff;
 
     dbg("TODO: unrecognised I/O read", dbg::hex(address));
-    exit(1);
+    return 0xff;
 }
 
 u32 Bus::io_read_u32(const u32 address)
@@ -349,15 +337,15 @@ u32 Bus::io_read_u32(const u32 address)
 
     // SPU voice registers
     if (address >= 0x1F801C00 && address <= 0x1F801D7E)
-        return 0;
+        return 0xff;
 
     // SPU control registers
     if (address >= 0x1F801D80 && address <= 0x1F801DBC)
-        return 0;
+        return 0xff;
 
     // SPU reverb configuration area - NOTE: should be DFC, not DFE?
     if (address >= 0x1F801DC0 && address <= 0x1F801DFE)
-        return 0;
+        return 0xff;
 
     // DMA control
     if (address == 0x1F8010F0)
@@ -380,7 +368,7 @@ u32 Bus::io_read_u32(const u32 address)
     if (address == 0x1F8010E8) { return dma_channel_control_channel_6; }
 
     dbg("TODO: unrecognised I/O read", dbg::hex(address));
-    exit(1);
+    return 0xff;
 }
 
 void Bus::io_write_u16(const u32 address, const u16 value)
@@ -412,7 +400,6 @@ void Bus::io_write_u16(const u32 address, const u16 value)
     }
 
     dbg("TODO: unrecognised I/O write", dbg::hex(address), dbg::hex(value));
-    exit(1);
 }
 
 void Bus::io_write_u32(const u32 address, const u32 value)
@@ -542,7 +529,6 @@ void Bus::io_write_u32(const u32 address, const u32 value)
     if (address == 0x1F80104A) return;
 
     dbg("TODO: unrecognised I/O write", dbg::hex(address), dbg::hex(value));
-    exit(1);
 }
 
 u32 Bus::get_physical_address(const u32 address) const

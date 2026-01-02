@@ -6,13 +6,92 @@ Drive::Drive()
     hintsts = 0b11100000;
 }
 
-void Drive::clock()
+bool Drive::clock()
 {
+    // Check for pending interrupt
     if ((hintmsk & hintsts) != 0)
+        return true;
+
+    if (commands_fifo.is_empty())
+        return false;
+
+    // Interrupts are queued; don't raise until the last one was acknowledged
+    // if ((hintsts & 0b11111) != 0)
+    //     return false;
+
+    const u8 command = commands_fifo.pop();
+
+    const auto int3 = [&]() { hintsts = (hintsts & 0b11111000) | (u8)InterruptType::Acknowledge; };
+    const auto int5 = [&]() { hintsts = (hintsts & 0b11111000) | (u8)InterruptType::DiskError; };
+    const auto stat = [&]() -> u8
     {
-        dbg("TODO: interrupt", dbg::bin(hintmsk), dbg::bin(hintsts));
-        exit(1);
+        // Motor on; bit 4 is shell open
+        return 0b10 | ((u8)shell_open << 4);
+    };
+
+    switch (command)
+    {
+        case 0x00:
+            // Unused
+            results_fifo.push(0x11);
+            results_fifo.push(0x40);
+            int5();
+            break;
+
+        case 0x01:
+            // NOP - resets shell open status
+            results_fifo.push(stat());
+            shell_open = false;
+            int3();
+            break;
+
+        case 0x19:
+        {
+            // Test / "sub_function"
+            const u8 sub_function = parameters_fifo.pop();
+            if (sub_function != 0x20) dbg("TODO: unknown CDROM sub-function");
+
+            // 0x20: Get CDROM BIOS date / version
+            results_fifo.push(94);  // Year
+            results_fifo.push(12);  // Month
+            results_fifo.push(3);   // Day
+            results_fifo.push(1);   // Version
+            int3();
+            break;
+        }
+
+        case 0x1A:
+        {
+            // GetID
+            if (!get_id_was_called)
+            {
+                // Signal that we're licensed
+                results_fifo.push(stat());
+                int3();
+            }
+            else
+            {
+                // Return licensed string (America / NTSC)
+                results_fifo.push(0x02);
+                results_fifo.push(0x00);
+                results_fifo.push(0x20);
+                results_fifo.push(0x00);
+                results_fifo.push('S');
+                results_fifo.push('C');
+                results_fifo.push('E');
+                results_fifo.push('A');
+                int5();
+            }
+            get_id_was_called = !get_id_was_called;
+            break;
+        }
+
+        default:
+            dbg("TODO: unknown CDROM command", dbg::hex(command));
+            exit(1);
     }
+
+    return false;
 }
 
 u8 Drive::read(const u32 address)
@@ -24,12 +103,13 @@ u8 Drive::read(const u32 address)
             dbg("TODO: rest of HSTS bits");
             return
                 (bank & 0b11) |
-                0b1000 | // Parameter FIFO empty
-                0b100000; // Parameter FIFO not full
+                (parameters_fifo.is_empty() ? 0b1000 : 0) |
+                (parameters_fifo.is_full() ? 0 : 0b100000) |
+                (results_fifo.is_empty() ? 0 : 0b100000);
 
         case 1:
-            dbg("RESULT read");
-            break;
+            // RESULT
+            return results_fifo.pop();
 
         case 2:
             dbg("RDDATA read");
@@ -59,7 +139,8 @@ void Drive::write(const u32 address, const u8 value)
             switch (bank)
             {
                 case 0:
-                    dbg("COMMAND write");
+                    // COMMAND
+                    commands_fifo.push(value);
                     break;
 
                 case 1:
@@ -80,7 +161,8 @@ void Drive::write(const u32 address, const u8 value)
             switch (bank)
             {
                 case 0:
-                    dbg("PARAMETER write");
+                    // PARAMETER
+                    parameters_fifo.push(value);
                     break;
 
                 case 1:
@@ -113,10 +195,15 @@ void Drive::write(const u32 address, const u8 value)
                     if ((value >> 3) & 0b1) hintsts &= (u8)~(1 << 3);
                     if ((value >> 4) & 0b1) hintsts &= (u8)~(1 << 4);
                     if ((value >> 5) & 0b1) dbg("TODO: clear sound map XA-ADPCM buffer");
-                    if ((value >> 6) & 0b1) dbg("TODO: clear parameter FIFO");
+                    if ((value >> 6) & 0b1) parameters_fifo.clear();
                     if ((value >> 7) & 0b1) dbg("TODO: reset decoder chip");
-                    dbg("TODO: if acknowledge, drain result FIFO and, if there's a "
-                        "pending command, send it to the controller");
+
+                    // If we acknowledged, drain result FIFO
+                    if ((value & 0b11111) != 0)
+                    {
+                        results_fifo.clear();
+                        dbg("TODO: if pending command, send to controller");
+                    }
                     break;
 
                 case 2:
