@@ -3,9 +3,6 @@
 
 Renderer::Renderer()
 {
-    dbg("TODO: texture flipping (X and Y) for triangles");
-    dbg("TODO: abstract getting colour from texel");
-    dbg("TODO: texel_mask and is_transparent for 15-bit triangle?");
     dbg("TODO: texture_window_offset_*, texture_window_mask_*");
 }
 
