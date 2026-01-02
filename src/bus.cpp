@@ -17,6 +17,8 @@ void Bus::clock()
 
     // TOOD: abstract
 
+    drive.clock();
+
     if (get_dma_master_enable(2) && DMAChannelControl::transfer_due(dma_channel_control_channel_2))
     {
         // TODO: respect DREQ - right now just assume the target is ready
@@ -185,7 +187,7 @@ u8 Bus::read_u8(const u32 address)
 
     // CD-ROM
     if (WITHIN(0x1F801800, 4))
-        return 0;
+        return drive.read(physical_address - 0x1F801800);
 
     // Serial something or other
     if (address == 0x1F801040) return 0;
@@ -263,7 +265,10 @@ void Bus::write_u8(const u32 address, const u8 value)
 
     // CD-ROM
     if (WITHIN(0x1F801800, 4))
+    {
+        drive.write(address - 0x1F801800, value);
         return;
+    }
 
     dbg("TODO: unknown bus write", dbg::hex(address), dbg::hex(value));
     exit(1);
@@ -403,8 +408,6 @@ void Bus::io_write_u16(const u32 address, const u16 value)
     if (address == 0x1F801074)
     {
         i_mask = value;
-        if (value != 0 && value != 1)
-            dbg("TODO: unsupported i_mask value", dbg::hex(value));
         return;
     }
 
@@ -471,8 +474,6 @@ void Bus::io_write_u32(const u32 address, const u32 value)
     if (address == 0x1F801074)
     {
         i_mask = value;
-        if (value != 0 && value != 1)
-            dbg("TODO: unsupported i_mask value", dbg::hex(value));
         return;
     }
 

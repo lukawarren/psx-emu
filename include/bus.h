@@ -1,6 +1,7 @@
 #pragma once
 #include "gpu.h"
 #include "interrupts.h"
+#include "drive.h"
 
 class CPU;
 
@@ -67,6 +68,7 @@ public:
     u32 dma_channel_control_channel_6;
 
     GPU gpu;
+    Drive drive;
 
 private:
     u16 io_read_u16(const u32 address);

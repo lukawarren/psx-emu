@@ -75,6 +75,7 @@ src_files = files(
   'src/bus.cpp',
   'src/gpu.cpp',
   'src/gte.cpp',
+  'src/drive.cpp',
   'src/trace.cpp',
   'src/renderer.cpp'
 )
