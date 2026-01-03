@@ -4,23 +4,32 @@ Drive::Drive()
 {
     // Bits 5-7 are always 1
     hintsts = 0b11100000;
+    second_response = SecondResponse::None;
+    read_n_mode = ReadNMode::None;
 }
 
 bool Drive::clock()
 {
+    const auto stat = [&]() -> u8
+    {
+        // Motor on
+        u8 value = 0b10;
+
+        // Lid is or was open
+        value |= ((u8)shell_open << 4);
+
+        // Finished seeking (i.e. seek bit off, read bit maybe on)
+        value |= ((u8)reading_data_sector << 5);
+        return value;
+    };
+    const auto int1 = [&]() { hintsts = (hintsts & 0b11111000) | (u8)InterruptType::DataReady; };
     const auto int2 = [&]() { hintsts = (hintsts & 0b11111000) | (u8)InterruptType::Complete; };
     const auto int3 = [&]() { hintsts = (hintsts & 0b11111000) | (u8)InterruptType::Acknowledge; };
     const auto int5 = [&]() { hintsts = (hintsts & 0b11111000) | (u8)InterruptType::DiskError; };
-    const auto stat = [&]() -> u8
-    {
-        // Motor on; bit 4 is shell open
-        return 0b10 | ((u8)shell_open << 4);
-    };
-    const auto int3_stat = [&]()
-    {
-        results_fifo.push(stat());
-        int3();
-    };
+    const auto int1_stat = [&]() { results_fifo.push(stat()); int1(); };
+    const auto int2_stat = [&]() { results_fifo.push(stat()); int2(); };
+    const auto int3_stat = [&]() { results_fifo.push(stat()); int3(); };
+    const auto int5_stat = [&]() { results_fifo.push(stat()); int5(); };
 
     // Check for pending interrupt
     if ((hintmsk & hintsts) != 0)
@@ -41,9 +50,13 @@ bool Drive::clock()
     }
     else if (second_response == SecondResponse::SeekL)
     {
-        dbg("stop any reading or pending ReadN or ReadS");
-        results_fifo.push(stat());
-        int2();
+        dbg("stop any reading or pending ReadS too");
+        read_n_mode = ReadNMode::None;
+        int2_stat();
+    }
+    else if (second_response == SecondResponse::Pause)
+    {
+        int2_stat();
     }
 
     if (second_response != SecondResponse::None)
@@ -75,15 +88,26 @@ bool Drive::clock()
         case 0x02:
             // SetLoc
             seek_target.min = parameters_fifo.pop();
-            seek_target.sec = parameters_fifo.pop();
+            seek_target.sector = parameters_fifo.pop();
             seek_target.frame = parameters_fifo.pop();
             int3_stat();
             break;
 
         case 0x06:
             // ReadN
-            dbg("TODO: read");
-            exit(1);
+            read_n_mode = ReadNMode::Interrupt;
+            reading_data_sector = true;
+            int3_stat();
+            break;
+
+        case 0x09:
+            // Pause
+            int3_stat();
+            second_response = SecondResponse::Pause;
+            read_n_mode = ReadNMode::None;
+            data_request_pending = false;
+            reading_data_sector = false;
+            dbg("TODO: paused; do for ReadS + playing too");
             break;
 
         case 0x0E:
@@ -132,6 +156,21 @@ bool Drive::clock()
             exit(1);
     }
 
+    // Executed command, but could be reading at same time
+    if (read_n_mode != ReadNMode::None)
+    {
+        if (read_n_mode == ReadNMode::Interrupt)
+        {
+            int1_stat();
+            read_n_mode = ReadNMode::Data;
+            data_request_pending = true;
+        }
+        else
+        {
+            read_n_mode = ReadNMode::Interrupt;
+        }
+    }
+
     return false;
 }
 
@@ -146,7 +185,8 @@ u8 Drive::read(const u32 address)
                 (bank & 0b11) |
                 (parameters_fifo.is_empty() ? 0b1000 : 0) |
                 (parameters_fifo.is_full() ? 0 : 0b100000) |
-                (results_fifo.is_empty() ? 0 : 0b100000);
+                (results_fifo.is_empty() ? 0 : 0b100000) |
+                (data_request_pending ? 0b1000000 : 0);
 
         case 1:
             // RESULT
@@ -154,6 +194,7 @@ u8 Drive::read(const u32 address)
 
         case 2:
             dbg("RDDATA read");
+            exit(1);
             break;
 
         case 3:

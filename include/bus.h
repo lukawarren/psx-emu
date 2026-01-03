@@ -60,12 +60,19 @@ public:
     u32 dma_control = 0x07654321; // Initial value on reset
     u32 dma_interrupt;
 
-    u32 dma_base_address_channel_2;
-    u32 dma_block_control_channel_2;
-    u32 dma_channel_control_channel_2;
-    u32 dma_base_address_channel_6;
-    u32 dma_block_control_channel_6;
-    u32 dma_channel_control_channel_6;
+    u32 dma_base_address_channel[7];
+    u32 dma_block_control_channel[7];
+    u32 dma_channel_control_channel[7];
+    enum class DMAChannel
+    {
+        RAMToMDEC = 0,
+        MDECToRAM = 1,
+        GPU = 2,
+        CDROM = 3,
+        SPU = 4,
+        PIO = 5,
+        OTC = 6
+    };
 
     GPU gpu;
     Drive drive;
@@ -118,6 +125,8 @@ private:
         bool force_start_without_dreq;
         bool mode_modifier;
 
+        DMAChannelControl() {}
+
         DMAChannelControl(const u32 control, const u8 channel)
         {
             if (channel == 6)
@@ -161,6 +170,10 @@ private:
             // Clear "start transfer" and "force transfer start" bits
             return control & ~((1U << 24) | (1U << 28));
         }
-
     };
+
+    void initialise_dma(const DMAChannel channel, const DMAChannelControl control);
+    void dma_slice(const DMAChannel channel, const DMAChannelControl control);
+    void dma_linked_list(const DMAChannel channel, const DMAChannelControl control);
+    void dma_burst(const DMAChannel channel, const DMAChannelControl control);
 };

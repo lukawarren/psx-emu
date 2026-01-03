@@ -11,6 +11,7 @@ public:
 private:
     // HSTS / ADDRESS
     u8 bank;
+    bool data_request_pending = false;
 
     // HINTSTS interrupt flags (bits 0-2 inclusive)
     enum class InterruptType
@@ -60,7 +61,7 @@ private:
     struct SeekLocation
     {
         u8 min;
-        u8 sec;
+        u8 sector;
         u8 frame;
     } seek_target, seek_data;
 
@@ -69,8 +70,18 @@ private:
     {
         None,
         GetID,
-        SeekL
+        SeekL,
+        Pause
     } second_response;
 
+    enum class ReadNMode
+    {
+        None,
+        Interrupt,
+        Data
+    } read_n_mode;
+
+    // Status code (stat)
     bool shell_open = true;
+    bool reading_data_sector = false;
 };
