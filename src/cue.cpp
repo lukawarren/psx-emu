@@ -38,10 +38,6 @@ u8 const* Cue::read_sector(const u32 lba)
     const long byte_offset = (track_start_lba + lba) * sector_size;
     assert((size_t)byte_offset < length);
 
-    dbg(dbg::hex(track_start_lba));
-    dbg(dbg::hex(lba));
-    dbg(dbg::hex(byte_offset));
-
     return &bin[byte_offset];
 }
 

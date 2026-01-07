@@ -3,6 +3,7 @@
 #define DBG_MACRO_NO_WARNING
 #include "dbg.h"
 
+#include <optional>
 #include <cstdint>
 #include <limits>
 #include <filesystem>

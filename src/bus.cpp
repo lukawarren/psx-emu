@@ -214,9 +214,9 @@ u16 Bus::io_read_u16(const u32 address)
         return (u16)i_mask;
 
     // Timer values
-    if (address == 0x1F801100) return timer_0;
-    if (address == 0x1F801110) return timer_1;
-    if (address == 0x1F801120) return timer_2;
+    if (address == 0x1F801100) return (u16)timer_0;
+    if (address == 0x1F801110) return (u16)timer_1;
+    if (address == 0x1F801120) return (u16)timer_2;
 
     // SPU voice registers
     if (address >= 0x1F801C00 && address <= 0x1F801D7E)
