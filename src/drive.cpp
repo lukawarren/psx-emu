@@ -1,6 +1,9 @@
 #include "drive.h"
 
-Drive::Drive()
+Drive::Drive() : cue(
+    "/home/luka/src/luka/psx-emu/ROMs/Crash Bandicoot (USA).cue",
+    "/home/luka/src/luka/psx-emu/ROMs/Crash Bandicoot (USA).bin"
+)
 {
     // Bits 5-7 are always 1
     hintsts = 0b11100000;
@@ -50,11 +53,13 @@ bool Drive::clock()
     }
     else if (second_response == SecondResponse::SeekL)
     {
-        dbg("stop any reading or pending ReadS too");
-        read_n_mode = ReadNMode::None;
         int2_stat();
     }
     else if (second_response == SecondResponse::Pause)
+    {
+        int2_stat();
+    }
+    else if (second_response == SecondResponse::Init)
     {
         int2_stat();
     }
@@ -69,7 +74,7 @@ bool Drive::clock()
         return false;
 
     const u8 command = commands_fifo.pop();
-
+dbg(dbg::hex(command));
     switch (command)
     {
         case 0x00:
@@ -86,12 +91,15 @@ bool Drive::clock()
             break;
 
         case 0x02:
+        {
             // SetLoc
-            seek_target.min = parameters_fifo.pop();
-            seek_target.sector = parameters_fifo.pop();
-            seek_target.frame = parameters_fifo.pop();
+            const u8 minute = from_bcd(parameters_fifo.pop());
+            const u8 second = from_bcd(parameters_fifo.pop());
+            const u8 frame = from_bcd(parameters_fifo.pop());
+            seek_target = msf_to_lba(minute, second, frame);
             int3_stat();
             break;
+        }
 
         case 0x06:
             // ReadN
@@ -110,6 +118,13 @@ bool Drive::clock()
             dbg("TODO: paused; do for ReadS + playing too");
             break;
 
+        case 0x0A:
+            // Init
+            dbg("TODO: Init() - set mode=0x20, activate drive motor, standby, abort all commands");
+            int3_stat();
+            second_response = SecondResponse::Init;
+            break;
+
         case 0x0E:
         {
             // Setmode
@@ -117,13 +132,26 @@ bool Drive::clock()
             dbg("TODO: setmode (including sector size)", dbg::bin(mode));
             if ((mode & 0b10) != 0) dbg("TODO: auto-pause");
             if ((mode & 0b10000) != 0) dbg("TODO: ignore bit");
+            set_mode_sector_size = (SectorSize)((mode >> 5) & 0b1);
             int3_stat();
             break;
         }
 
+        case 0x13:
+            // GetTN
+            dbg("TODO: GetTN() - what is TOC?");
+            parameters_fifo.push(stat());
+            parameters_fifo.push(to_bcd(1)); // First track number
+            parameters_fifo.push(to_bcd(1)); // Last track number
+            break;
+
         case 0x15:
             // SeekL
             seek_data = seek_target;
+            dbg("stop any reading or pending ReadS too");
+            read_n_mode = ReadNMode::None;
+            data_request_pending = false;
+            reading_data_sector = false;
             second_response = SecondResponse::SeekL;
             int3_stat();
             break;
@@ -164,10 +192,11 @@ bool Drive::clock()
             int1_stat();
             read_n_mode = ReadNMode::Data;
             data_request_pending = true;
-        }
-        else
-        {
-            read_n_mode = ReadNMode::Interrupt;
+
+            // Fetch actual sector
+            read_n_mode = ReadNMode::Data;
+            read_n_sector = cue.read_sector(seek_data);
+            read_n_byte = 0;
         }
     }
 
@@ -176,6 +205,7 @@ bool Drive::clock()
 
 u8 Drive::read(const u32 address)
 {
+    dbg("CD read");
     switch (address)
     {
         case 0:
@@ -193,9 +223,32 @@ u8 Drive::read(const u32 address)
             return results_fifo.pop();
 
         case 2:
-            dbg("RDDATA read");
-            exit(1);
-            break;
+        {
+            // RDDATA
+            u32 data_start = 12;
+            if (set_mode_sector_size == SectorSize::DataOnly)
+                data_start += 12;
+
+            // If outside region of data buffer, pad
+            if (set_mode_sector_size == SectorSize::DataOnly && read_n_byte >= 0x800)
+            {
+                read_n_byte++;
+                return read_n_sector[data_start + 0x800 - 8];
+            }
+            else if (read_n_byte >= 0x924)
+            {
+                read_n_byte++;
+                return read_n_sector[data_start + 0x924 - 4];
+            }
+
+            const u8 data = read_n_sector[data_start + read_n_byte++];
+
+            // If buffer is now empty, set DRQSTS to false
+            if ((set_mode_sector_size == SectorSize::DataOnly && read_n_byte >= 0x800) || read_n_byte >= 0x924)
+                data_request_pending = false;
+
+            return data;
+        }
 
         case 3:
             // HINTMSK - bits 5-7 reserved and always read as 1
@@ -299,3 +352,4 @@ void Drive::write(const u32 address, const u8 value)
             break;
     }
 }
+

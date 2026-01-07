@@ -1,5 +1,6 @@
 #include "bus.h"
 #include "cpu.h"
+#include "io.h"
 
 #define WITHIN(base, size) (physical_address >= base && physical_address < base + size)
 
@@ -211,6 +212,11 @@ u16 Bus::io_read_u16(const u32 address)
     // I_MASK
     if (address == 0x1F801074)
         return (u16)i_mask;
+
+    // Timer values
+    if (address == 0x1F801100) return timer_0;
+    if (address == 0x1F801110) return timer_1;
+    if (address == 0x1F801120) return timer_2;
 
     // SPU voice registers
     if (address >= 0x1F801C00 && address <= 0x1F801D7E)
@@ -488,51 +494,20 @@ u8* Bus::get_bank_address(const u32 physical_address)
     return nullptr;
 }
 
-std::pair<std::ifstream, std::streamsize> Bus::read_file(const std::string& filename, const size_t max_size) const
-{
-    // Check isn't folder
-    if (!std::filesystem::is_regular_file(filename))
-        throw std::runtime_error(filename + " is not a file");
-
-    // Open file
-    std::ifstream file(filename, std::ios::binary);
-    if (!file.is_open())
-        throw std::runtime_error("unable to open file " + filename);
-
-    // Get file length
-    file.seekg(0, std::ios::end);
-    const auto file_length = file.tellg();
-    file.seekg(0, std::ios::beg);
-
-    if (max_size != 0 && (size_t)file_length > max_size)
-        throw std::runtime_error(filename + " is too large");
-
-    return { std::move(file), file_length };
-}
-
-void Bus::read_file(u8* buffer, const size_t max_size, const std::string& filename) const
-{
-    auto file = read_file(filename, max_size);
-    file.first.read(reinterpret_cast<char*>(buffer), file.second);
-    file.first.close();
-}
-
-u8* Bus::read_file(const std::string& filename) const
-{
-    auto file = read_file(filename, 0);
-    u8* buffer = new u8[file.second];
-    file.first.read(reinterpret_cast<char*>(buffer), file.second);
-    file.first.close();
-    return buffer;
-}
-
 void Bus::initialise_dma(const DMAChannel channel, const DMAChannelControl control)
 {
-    switch (control.transfer_mode)
+    if (channel == DMAChannel::SPU)
     {
-        case DMAChannelControl::TransferMode::Burst: dma_burst(channel, control); break;
-        case DMAChannelControl::TransferMode::LinkedList: dma_linked_list(channel, control); break;
-        case DMAChannelControl::TransferMode::Slice: dma_slice(channel, control); break;
+        dbg("TODO: SPU dma");
+    }
+    else
+    {
+        switch (control.transfer_mode)
+        {
+            case DMAChannelControl::TransferMode::Burst: dma_burst(channel, control); break;
+            case DMAChannelControl::TransferMode::LinkedList: dma_linked_list(channel, control); break;
+            case DMAChannelControl::TransferMode::Slice: dma_slice(channel, control); break;
+        }
     }
 
     // Mark DMA as finished

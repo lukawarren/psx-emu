@@ -17,6 +17,17 @@
 #include <cmath>
 #include <bit>
 
+// For mmap'ing
+#include <sys/mman.h>
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <fcntl.h>
+
+// For parsing CUE files
+extern "C" {
+    #include <libcue.h>
+}
+
 #include <SDL3/SDL.h>
 #include <SDL3/SDL_main.h>
 

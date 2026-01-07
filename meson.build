@@ -63,6 +63,7 @@ endif
 
 # Dependencies
 sdl3_dep = dependency('sdl3', required: true)
+libcue_dep = dependency('libcue', required: true)
 
 # Headers
 inc = include_directories('include', 'external/dbg-macro')
@@ -76,6 +77,8 @@ src_files = files(
   'src/gpu.cpp',
   'src/gte.cpp',
   'src/drive.cpp',
+  'src/cue.cpp',
+  'src/io.cpp',
   'src/trace.cpp',
   'src/renderer.cpp'
 )
@@ -87,6 +90,6 @@ executable(
   include_directories: inc,
   cpp_pch: pch,
   install: false,
-  dependencies: [sdl3_dep],
+  dependencies: [sdl3_dep, libcue_dep],
   link_args: link_args
 )

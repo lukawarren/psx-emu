@@ -85,10 +85,6 @@ private:
     u8* get_bank_address(const u32 address);
     u32 get_physical_address(const u32 address) const;
 
-    std::pair<std::ifstream, std::streamsize> read_file(const std::string& filename, const size_t max_size) const;
-    void read_file(u8* buffer, size_t max_size, const std::string& filename) const;
-    u8* read_file(const std::string& filename) const;
-
     u8 bios[4096 * 1024]; // 4 KB
     u8 ram[2 * 1024 * 1024]; // 2 MB
     u8 scratchpad[1024]; // 1 KB

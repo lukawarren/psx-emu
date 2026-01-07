@@ -1,9 +1,11 @@
 #pragma once
+#include "cue.h"
 
 class Drive
 {
 public:
     Drive();
+
     bool clock();
     u8 read(const u32 address);
     void write(const u32 address, const u8 value);
@@ -58,12 +60,7 @@ private:
     FIFO commands_fifo = {};
     FIFO parameters_fifo = {};
 
-    struct SeekLocation
-    {
-        u8 min;
-        u8 sector;
-        u8 frame;
-    } seek_target, seek_data;
+    u32 seek_target, seek_data;
 
     // Some commands can send several responses
     enum class SecondResponse
@@ -71,17 +68,47 @@ private:
         None,
         GetID,
         SeekL,
-        Pause
+        Pause,
+        Init
     } second_response;
 
+    // ReadN
     enum class ReadNMode
     {
         None,
         Interrupt,
         Data
     } read_n_mode;
+    u8 const* read_n_sector;
+    u32 read_n_byte;
+
+    // Setmode
+    enum class SectorSize
+    {
+        DataOnly = 0,
+        WholeSectorExceptSyncBytes = 1
+    } set_mode_sector_size;
 
     // Status code (stat)
     bool shell_open = true;
     bool reading_data_sector = false;
+
+    u8 from_bcd(const u8 bcd) const
+    {
+        const int hi = (bcd >> 4) & 0xf;
+        const int lo = bcd & 0xf;
+        return (u8)(hi * 10 + lo);
+    }
+
+    u8 to_bcd(const u8 b) const
+    {
+        return ((b / 10) << 4) | (b % 10);
+    }
+
+    u32 msf_to_lba(const u8 minute, const u8 second, const u8 frame) const
+    {
+        return ((u32)minute * 60 * 75) + ((u32)second * 75) + (u32)frame;
+    }
+
+    Cue cue;
 };

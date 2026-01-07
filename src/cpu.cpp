@@ -5,7 +5,7 @@
 #define ENABLE_SERIAL 1
 #define SIDELOAD_EXE 0
 
-CPU::CPU() : bus(*this, "../SCPH1001.bin")
+CPU::CPU() : bus(*this, "/home/luka/src/luka/psx-emu/SCPH1001.bin")
 {
     pc = 0xBFC00000;
     next_pc = pc + 4;

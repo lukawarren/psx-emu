@@ -93,5 +93,7 @@ int main()
     SDL_DestroyTexture(texture);
     SDL_DestroyRenderer(renderer);
     SDL_DestroyWindow(window);
+    delete cpu;
+
     SDL_Quit();
 }
