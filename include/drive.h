@@ -98,7 +98,7 @@ private:
             return value;
         }
 
-    } status;
+    } status = {};
 
     // Mode
     struct Mode
@@ -111,6 +111,12 @@ private:
         bool sector_size;
         bool xa_adpcm;
         bool double_speed;
+
+        Mode()
+        {
+            // Default value, at least from Init command
+            from_u8(0x20);
+        }
 
         void from_u8(const u8 value)
         {
@@ -136,7 +142,7 @@ private:
                 ((u8)xa_adpcm << 6) |
                 ((u8)double_speed << 7);
         }
-    } mode;
+    } mode = {};
 
     struct FIFO
     {
@@ -178,19 +184,20 @@ private:
         None,
         GetID,
         SeekL,
-        Pause
+        Pause,
+        Init
     } command_state = CommandState::None;
 
     // SetLoc data
     struct SetLoc
     {
-        u8 minutes;
-        u8 seconds;
-        u8 sector;
-    } set_loc_data;
+        u8 minutes = 0;
+        u8 seconds = 0;
+        u8 sector = 0;
+    } set_loc_data = {};
 
     // Seeking
-    u32 seek_sector;
+    u32 seek_sector = 0;
 
     // Reading
     std::vector<u8> read_buffer;

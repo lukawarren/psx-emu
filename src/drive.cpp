@@ -95,6 +95,7 @@ void Drive::write(const u32 address, const u8 value)
             switch (fifo_status.bank)
             {
                 case 0:
+                    // COMMAND
                     push_command(value);
                     break;
 
@@ -175,6 +176,8 @@ void Drive::continue_previous_command()
 {
     command_delay_timer = cdrom_command_delay;
 
+    const auto int2_stat = [&]() { push_status(); raise_interrupt(InterruptType::Complete); };
+
     switch (command_state)
     {
         case CommandState::GetID:
@@ -191,13 +194,9 @@ void Drive::continue_previous_command()
         break;
 
         case CommandState::SeekL:
-            push_status();
-            raise_interrupt(InterruptType::Complete);
-        break;
-
         case CommandState::Pause:
-            push_status();
-            raise_interrupt(InterruptType::Complete);
+        case CommandState::Init:
+            int2_stat();
         break;
 
         default: break;
@@ -208,6 +207,7 @@ void Drive::continue_previous_command()
 void Drive::on_command(const u8 opcode)
 {
     command_delay_timer = cdrom_command_delay;
+    dbg(dbg::hex(opcode));
 
     // All commands start the motor
     status.motor_on = true;
@@ -256,10 +256,37 @@ void Drive::on_command(const u8 opcode)
             command_state = CommandState::Pause;
         break;
 
+        case 0x0A:
+            // Init; reset state
+            mode = {};
+            status = {};
+            status.motor_on = true;
+            read_buffer.clear();
+            read_buffer_index = 0;
+            read_buffer_length = 0;
+            reset_parameter_fifo();
+            result_fifo.clear();
+            fifo_status.result_data_ready = false;
+            seek_sector = 0;
+            set_loc_data = {};
+
+            int3_stat();
+            command_state = CommandState::Init;
+        break;
+
         case 0x0E:
             // Setmode
             mode.from_u8(pop_parameter());
             int3_stat();
+        break;
+
+        case 0x13:
+            // GetTN (track number)
+            dbg("TODO: GetTN");
+            push_status();
+            push_result(1);
+            push_result(1);
+            raise_interrupt(InterruptType::Acknowledge);
         break;
 
         case 0x15:
@@ -338,7 +365,7 @@ u8 Drive::pop_parameter()
 {
     const u8 value = parameter_fifo.pop();
     fifo_status.parameter_fifo_empty = parameter_fifo.is_empty();
-    fifo_status.parameter_fifo_not_full = false;
+    fifo_status.parameter_fifo_not_full = true;
     return value;
 }
 
