@@ -25,8 +25,9 @@ Cue::Cue(const std::string& cue_file, const std::string& bin_file)
     }
 }
 
-u8 const* Cue::read_sector(const u32 lba)
+u8 const* Cue::read_byte(const u32 lba)
 {
+#if 0
     // TODO: assume LBA is in track 1
     const Track* track = cd_get_track(cd, 1);
     assert(track != nullptr);
@@ -39,6 +40,10 @@ u8 const* Cue::read_sector(const u32 lba)
     assert((size_t)byte_offset < length);
 
     return &bin[byte_offset];
+#else
+    assert((size_t)lba < length);
+    return &bin[lba];
+#endif
 }
 
 Cue::~Cue()

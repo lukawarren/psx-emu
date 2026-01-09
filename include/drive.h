@@ -103,14 +103,14 @@ private:
     // Mode
     struct Mode
     {
-        bool cdda;
-        bool auto_pause;
-        bool report_interrupt_enable;
-        bool xa_filter;
-        bool ignore_bit;
-        bool sector_size;
-        bool xa_adpcm;
-        bool double_speed;
+        bool cdda;                      // CDDA
+        bool auto_pause;                // AutoPause
+        bool report_interrupt_enable;   // Report
+        bool xa_filter;                 // XA-Filter
+        bool ignore_bit;                // Ignore Bit
+        bool sector_size;               // Sector Size; 0 = data only, 1 = whole
+        bool xa_adpcm;                  // XA-ADPCM
+        bool double_speed;              // Speed
 
         Mode()
         {
@@ -201,7 +201,6 @@ private:
 
     // Reading
     std::vector<u8> read_buffer;
-    u32 read_buffer_length;
     u32 read_buffer_index = 0;
 
     void continue_previous_command();

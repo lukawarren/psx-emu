@@ -3,6 +3,7 @@
 constexpr static u32 cdrom_command_delay = 0x1100;
 constexpr static u32 cdrom_read_play_delay = 0x6e400;
 constexpr static u32 sector_size = 0x930;
+constexpr static u32 data_size = 0x800;
 
 Drive::Drive() : cue(
     "/home/luka/src/luka/psx-emu/ROMs/Crash Bandicoot (USA).cue",
@@ -43,7 +44,7 @@ bool Drive::clock()
     if (status.mode == Status::Mode::Read)
     {
         if (read_play_delay_timer > 0)
-            read_play_delay_timer--;
+            read_play_delay_timer -= mode.double_speed ? 2 : 1;
 
         // Again, only if no interrupts due
         if (read_play_delay_timer == 0 && (interrupt_status & 0b111) == 0)
@@ -145,7 +146,22 @@ void Drive::write(const u32 address, const u8 value)
             switch (fifo_status.bank)
             {
                 case 0:
-                    dbg("TODO: HCHPCTL write");
+                    // HCHPCTL
+                    dbg("TODO: HCHPCTL; SMEN (sound map enable)");
+                    if (((value >> 6) & 0b1) != 0)
+                    {
+                        // BFWR; request sector buffer write
+                        dbg("TODO: BFWR in HCHPCTL");
+                        exit(1);
+                    }
+                    if (((value >> 7) & 0b1) != 0)
+                    {
+                        // BFRD; request sector buffer read
+                        // Should transfer sector read into "data FIFO" but no need
+                        // Just let RDDATA draw from sector directly for now
+                        fifo_status.data_request = true;
+                    }
+
                     break;
 
                 case 1:
@@ -207,7 +223,6 @@ void Drive::continue_previous_command()
 void Drive::on_command(const u8 opcode)
 {
     command_delay_timer = cdrom_command_delay;
-    dbg(dbg::hex(opcode));
 
     // All commands start the motor
     status.motor_on = true;
@@ -241,11 +256,7 @@ void Drive::on_command(const u8 opcode)
             on_seek();
             status.mode = Status::Mode::Read;
             int3_stat();
-
-            read_play_delay_timer = mode.double_speed ?
-                cdrom_read_play_delay / 2 :
-                cdrom_read_play_delay;
-
+            read_play_delay_timer = cdrom_read_play_delay;
             read_buffer.clear();
         break;
 
@@ -263,7 +274,6 @@ void Drive::on_command(const u8 opcode)
             status.motor_on = true;
             read_buffer.clear();
             read_buffer_index = 0;
-            read_buffer_length = 0;
             reset_parameter_fifo();
             result_fifo.clear();
             fifo_status.result_data_ready = false;
@@ -284,8 +294,8 @@ void Drive::on_command(const u8 opcode)
             // GetTN (track number)
             dbg("TODO: GetTN");
             push_status();
-            push_result(1);
-            push_result(1);
+            push_result(to_bcd(1));
+            push_result(to_bcd(1));
             raise_interrupt(InterruptType::Acknowledge);
         break;
 
@@ -378,17 +388,17 @@ u8 Drive::pop_result()
 
 u8 Drive::pop_data()
 {
-    // TODO: should actually pad to last X bytes??
-    if (read_buffer_index >= read_buffer_length || read_buffer_index >= read_buffer.size())
+    // TODO: pad to last valid byte
+    if (read_buffer_index >= read_buffer.size())
         return 0;
 
     const u8 data = read_buffer[read_buffer_index++];
 
-    if (read_buffer_index == read_buffer_length)
+    if (read_buffer_index == read_buffer.size())
     {
+        fifo_status.data_request = false;
         read_buffer.clear();
         read_buffer_index = 0;
-        fifo_status.data_request = false;
     }
 
     return data;
@@ -402,30 +412,39 @@ void Drive::on_seek()
     const u32 seconds = set_loc_data.seconds;
     const u32 sector = set_loc_data.sector;
 
+
     dbg("TODO: figure out where's best to minus 2");
+    assert(seconds >= 2);
     seek_sector = ((minutes * 60 + seconds - 2) * 75 + sector);
+    dbg("CDROM seek", minutes, seconds, sector, dbg::hex(seek_sector), dbg::hex(((minutes * 60 + seconds) * 75 + sector)));
 }
 
 void Drive::on_read()
 {
-    const u32 sector_start = seek_sector * sector_size;
+    if (!read_buffer.empty())
+    {
+        dbg("tried to read but FIFO was full");
+        return;
+    }
 
-    // Read data; skip 12 sync bytes and optionally more
-    const u8* const data = cue.read_sector(sector_start)
-        + 12
-        + (mode.sector_size ? 0 : 12);
-    const u32 length = sector_size - 12 - (mode.sector_size ? 0 : 12);
+    u32 sector_start = seek_sector * sector_size;
+
+    // Read data; skip 12 sync bytes
+    const u8* const data = cue.read_byte(sector_start);
+    const u32 start = 12 + (mode.sector_size ? 0 : 12);
+    const u32 end = mode.sector_size ? sector_size : data_size + 12;
 
     read_buffer.clear();
-    read_buffer_length = length;
-
-    for (u32 i = 0; i < length; i++)
+    for (u32 i = start; i < end; i++)
         read_buffer.push_back(data[i]);
+    read_buffer_index = 0;
 
     fifo_status.result_data_ready = true;
+    seek_sector++;
 
     push_status();
     raise_interrupt(InterruptType::DataReady);
+    read_play_delay_timer = cdrom_read_play_delay;
 }
 
 void Drive::raise_interrupt(const InterruptType interrupt)

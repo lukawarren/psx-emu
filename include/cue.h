@@ -6,7 +6,7 @@ public:
     Cue(const std::string& cue_file, const std::string& bin_file);
     ~Cue();
 
-    u8 const* read_sector(const u32 lba);
+    u8 const* read_byte(const u32 lba);
 
 private:
     // BIN file
