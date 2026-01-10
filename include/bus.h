@@ -2,6 +2,7 @@
 #include "gpu.h"
 #include "interrupts.h"
 #include "drive.h"
+#include "timer.h"
 
 class CPU;
 
@@ -51,18 +52,23 @@ public:
 
     u32 i_stat; // Interrupt status register
     u32 i_mask; // Interrupt mask register
-    u32 timer_0;
-    u32 timer_1;
-    u32 timer_2;
-    u32 timer_0_target;
-    u32 timer_1_target;
-    u32 timer_2_target;
+
+    u16 timer_0;
+    u16 timer_1;
+    u16 timer_2;
+    TimerCounterMode<0> timer_counter_mode_0;
+    TimerCounterMode<1> timer_counter_mode_1;
+    TimerCounterMode<2> timer_counter_mode_2;
+    u16 timer_0_target;
+    u16 timer_1_target;
+    u16 timer_2_target;
+
     u32 dma_control = 0x07654321; // Initial value on reset
     u32 dma_interrupt;
-
     u32 dma_base_address_channel[7];
     u32 dma_block_control_channel[7];
     u32 dma_channel_control_channel[7];
+
     enum class DMAChannel
     {
         RAMToMDEC = 0,

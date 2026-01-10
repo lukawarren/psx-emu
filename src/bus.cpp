@@ -214,9 +214,19 @@ u16 Bus::io_read_u16(const u32 address)
         return (u16)i_mask;
 
     // Timer values
-    if (address == 0x1F801100) return (u16)timer_0;
-    if (address == 0x1F801110) return (u16)timer_1;
-    if (address == 0x1F801120) return (u16)timer_2;
+    if (address == 0x1F801100) return timer_0;
+    if (address == 0x1F801110) return timer_1;
+    if (address == 0x1F801120) return timer_2;
+
+    // Timer counter modes
+    if (address == 0x1F801104) return timer_counter_mode_0.read();
+    if (address == 0x1F801114) return timer_counter_mode_1.read();
+    if (address == 0x1F801124) return timer_counter_mode_2.read();
+
+    // Timer targets
+    if (address == 0x1F801108) return timer_0_target;
+    if (address == 0x1F801118) return timer_1_target;
+    if (address == 0x1F801128) return timer_2_target;
 
     // SPU voice registers
     if (address >= 0x1F801C00 && address <= 0x1F801D7E)
@@ -248,6 +258,16 @@ u32 Bus::io_read_u32(const u32 address)
     if (address == 0x1F801100) return timer_0;
     if (address == 0x1F801110) return timer_1;
     if (address == 0x1F801120) return timer_2;
+
+    // Timer counter modes
+    if (address == 0x1F801104) return timer_counter_mode_0.read();
+    if (address == 0x1F801114) return timer_counter_mode_1.read();
+    if (address == 0x1F801124) return timer_counter_mode_2.read();
+
+    // Timer targets
+    if (address == 0x1F801108) return timer_0_target;
+    if (address == 0x1F801118) return timer_1_target;
+    if (address == 0x1F801128) return timer_2_target;
 
     // SPU voice registers
     if (address >= 0x1F801C00 && address <= 0x1F801D7E)
@@ -321,6 +341,33 @@ void Bus::io_write_u16(const u32 address, const u16 value)
         return;
     }
 
+    // Timer values
+    if (address == 0x1F801100) { timer_0 = value; return; }
+    if (address == 0x1F801110) { timer_1 = value; return; }
+    if (address == 0x1F801120) { timer_2 = value; return; }
+
+    // Timer counter modes
+    if (address == 0x1F801104)
+    {
+        timer_counter_mode_0.write(value);
+        return;
+    }
+    if (address == 0x1F801114)
+    {
+        timer_counter_mode_1.write(value);
+        return;
+    }
+    if (address == 0x1F801124)
+    {
+        timer_counter_mode_2.write(value);
+        return;
+    }
+
+    // Timer targets
+    if (address == 0x1F801108) { timer_0_target = value; return; }
+    if (address == 0x1F801118) { timer_1_target = value; return; }
+    if (address == 0x1F801128) { timer_2_target = value; return; }
+
     dbg("TODO: unrecognised I/O write", dbg::hex(address), dbg::hex(value));
 }
 
@@ -386,38 +433,32 @@ void Bus::io_write_u32(const u32 address, const u32 value)
         return;
     }
 
+    // Timer values
+    if (address == 0x1F801100) { timer_0 = (u16)value; return; }
+    if (address == 0x1F801110) { timer_1 = (u16)value; return; }
+    if (address == 0x1F801120) { timer_2 = (u16)value; return; }
+
     // Timer counter modes
     if (address == 0x1F801104)
     {
-        if (value != 0)
-            dbg("TODO: unsupported timer 0 counter mode", dbg::hex(value));
-        timer_0 = 0;
+        timer_counter_mode_0.write((u16)value);
         return;
     }
     if (address == 0x1F801114)
     {
-        if (value != 0)
-            dbg("TODO: unsupported timer 1 counter mode", dbg::hex(value));
-        timer_1 = 0;
+        timer_counter_mode_1.write((u16)value);
         return;
     }
     if (address == 0x1F801124)
     {
-        if (value != 0)
-            dbg("TODO: unsupported timer 2 counter mode", dbg::hex(value));
-        timer_2 = 0;
+        timer_counter_mode_2.write((u16)value);
         return;
     }
 
-    // Timer values
-    if (address == 0x1F801100) { timer_0 = value; return; }
-    if (address == 0x1F801110) { timer_1 = value; return; }
-    if (address == 0x1F801120) { timer_2 = value; return; }
-
     // Timer targets
-    if (address == 0x1F801108) { timer_0_target = value; return; }
-    if (address == 0x1F801118) { timer_1_target = value; return; }
-    if (address == 0x1F801128) { timer_2_target = value; return; }
+    if (address == 0x1F801108) { timer_0_target = (u16)value; return; }
+    if (address == 0x1F801118) { timer_1_target = (u16)value; return; }
+    if (address == 0x1F801128) { timer_2_target = (u16)value; return; }
 
     // DMA control
     if (address == 0x1F8010F0)
