@@ -426,11 +426,11 @@ void Drive::on_seek()
     const u32 seconds = set_loc_data.seconds;
     const u32 sector = set_loc_data.sector;
 
+    seek_sector = ((minutes * 60 + seconds) * 75 + sector);
 
-    dbg("TODO: figure out where's best to minus 2");
-    assert(seconds >= 2);
-    seek_sector = ((minutes * 60 + seconds - 2) * 75 + sector);
-    dbg("CDROM seek", minutes, seconds, sector, dbg::hex(seek_sector), dbg::hex(((minutes * 60 + seconds) * 75 + sector)));
+    // Minus 2 seconds - TODO: is this the best place?
+    assert(seek_sector >= 2 * 75);
+    seek_sector -= 2 * 75;
 }
 
 void Drive::on_read()
