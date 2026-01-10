@@ -405,7 +405,6 @@ void GPU::send_gp0_command(const u32 opcode)
     }
 
     dbg("TODO: unknown GP0 command", dbg::hex(opcode), dbg::hex(command), dbg::bin((u8)mode));
-    exit(1);
 }
 
 void GPU::send_gp1_command(const u32 opcode)

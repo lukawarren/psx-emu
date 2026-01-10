@@ -34,11 +34,20 @@ bool Drive::clock()
             {
                 on_command(*command);
                 command.reset();
+
+                // Command done
+                if (command_state == CommandState::None)
+                    fifo_status.busy = false;
             }
         }
         else
+        {
             continue_previous_command();
 
+            // Command done
+            if (command_state == CommandState::None)
+                fifo_status.busy = false;
+        }
     }
 
     if (status.mode == Status::Mode::Read)
@@ -147,7 +156,11 @@ void Drive::write(const u32 address, const u8 value)
             {
                 case 0:
                     // HCHPCTL
-                    dbg("TODO: HCHPCTL; SMEN (sound map enable)");
+                    if (((value >> 5) & 0b1) != 0)
+                    {
+                        dbg("TODO: HCHPCTL; SMEN (sound map enable)");
+                        exit(1);
+                    }
                     if (((value >> 6) & 0b1) != 0)
                     {
                         // BFWR; request sector buffer write
@@ -262,8 +275,8 @@ void Drive::on_command(const u8 opcode)
 
         case 0x09:
             // Pause
-            status.mode = Status::Mode::None;
             int3_stat();
+            status.mode = Status::Mode::None;
             command_state = CommandState::Pause;
         break;
 
@@ -358,6 +371,7 @@ void Drive::push_command(const u8 value)
     command = { value };
     command_delay_timer = cdrom_command_delay;
     command_state = CommandState::None;
+    fifo_status.busy = true;
 }
 
 void Drive::push_result(const u8 value)
@@ -439,7 +453,6 @@ void Drive::on_read()
         read_buffer.push_back(data[i]);
     read_buffer_index = 0;
 
-    fifo_status.result_data_ready = true;
     seek_sector++;
 
     push_status();
