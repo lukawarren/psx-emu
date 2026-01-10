@@ -178,4 +178,6 @@ private:
     void dma_slice(const DMAChannel channel, const DMAChannelControl control);
     void dma_linked_list(const DMAChannel channel, const DMAChannelControl control);
     void dma_burst(const DMAChannel channel, const DMAChannelControl control);
+
+    void clock_timers();
 };

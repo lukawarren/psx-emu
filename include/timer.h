@@ -85,7 +85,7 @@ struct TimerCounterMode
         }
 
         // Always set to 1 when writing
-        interrupt_request = true;
+        interrupt_request_inverted = true;
 
         // Remaining values are read-only
     }
@@ -102,7 +102,7 @@ struct TimerCounterMode
         value |= (u16)fire_irq_repeatedly << 6;
         value |= (u16)irq_toggle_mode << 7;
         value |= ((u16)raw_clock_source & 0b11) << 8;
-        value |= (u16)interrupt_request << 10;
+        value |= (u16)interrupt_request_inverted << 10;
         value |= (u16)reached_target_value << 11;
         value |= (u16)reached_max_value << 12;
 
@@ -121,7 +121,7 @@ struct TimerCounterMode
     bool fire_irq_repeatedly;
     bool irq_toggle_mode; // as opposed to "pulse mode"
     ClockSource clock_source;
-    bool interrupt_request;
+    bool interrupt_request_inverted; // 0 = yes, 1 = no
     bool reached_target_value;
     bool reached_max_value;
 };

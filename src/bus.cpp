@@ -13,12 +13,13 @@ Bus::Bus(CPU& cpu, const std::string& bios_path) : cpu(cpu)
 
 void Bus::clock()
 {
-    // TODO: analyse priorities if multiple DMA channels are due
-    //       (on a tie, take 0 as lowest and 6 as highest priority)
+    clock_timers();
 
-    // TOOD: abstract
     if (drive.clock())
         fire_interrupt(Interrupt::CDROM);
+
+    // TODO: analyse priorities if multiple DMA channels are due
+    //       (on a tie, take 0 as lowest and 6 as highest priority)
 
     // DMA has 0 as lowest priority, 6 as highest - TODO: sort by get_dma_priority(n) first
     int pending_channel = -1;
@@ -350,16 +351,19 @@ void Bus::io_write_u16(const u32 address, const u16 value)
     if (address == 0x1F801104)
     {
         timer_counter_mode_0.write(value);
+        timer_0 = 0;
         return;
     }
     if (address == 0x1F801114)
     {
         timer_counter_mode_1.write(value);
+        timer_1 = 0;
         return;
     }
     if (address == 0x1F801124)
     {
         timer_counter_mode_2.write(value);
+        timer_2 = 0;
         return;
     }
 
@@ -442,16 +446,19 @@ void Bus::io_write_u32(const u32 address, const u32 value)
     if (address == 0x1F801104)
     {
         timer_counter_mode_0.write((u16)value);
+        timer_0 = 0;
         return;
     }
     if (address == 0x1F801114)
     {
         timer_counter_mode_1.write((u16)value);
+        timer_1 = 0;
         return;
     }
     if (address == 0x1F801124)
     {
         timer_counter_mode_2.write((u16)value);
+        timer_2 = 0;
         return;
     }
 
@@ -675,4 +682,68 @@ void Bus::dma_burst(const DMAChannel channel, const DMAChannelControl control)
 
     // Set relevant MADR to the end marker
     dma_base_address_channel[n] = 0xFFFFFF;
+}
+
+void Bus::clock_timers()
+{
+    // TODO: delay incrementing by two cycles after reset via mode register,
+    //       and when writing to actual timer value
+
+    if (((i_mask & (1 << 4)) != 0)) dbg("TODO: Timer0 IRQ wanted");
+    if (((i_mask & (1 << 5)) != 0)) dbg("TODO: Timer1 IRQ wanted");
+    if (((i_mask & (1 << 6)) != 0)) dbg("TODO: Timer2 IRQ wanted");
+
+    timer_0++;
+    timer_1++;
+    timer_2++;
+
+    return;
+
+#if 0
+    const auto increment = []<int i>(u16& timer, u16& target, TimerCounterMode<i>& mode)
+    {
+        // TODO: respect mode.clock_source
+        timer++;
+
+        if (mode.synchronisation_enable)
+            dbg("TODO: timer synchronisation mode");
+
+        if (timer == 0xFFFF)
+        {
+            mode.reached_max_value = true;
+
+            if (mode.irq_on_max_value_reached)
+                mode.interrupt_request_inverted = false;
+        }
+
+        if (timer == target)
+        {
+            mode.reached_target_value = true;
+
+            if (mode.irq_on_target_reached)
+                mode.interrupt_request_inverted = false;
+
+            if (mode.reset_counter_after_target)
+                timer = 0;
+        }
+    };
+
+    increment.template operator()<0>(timer_0, timer_0_target, timer_counter_mode_0);
+    increment.template operator()<1>(timer_1, timer_1_target, timer_counter_mode_1);
+    increment.template operator()<2>(timer_2, timer_2_target, timer_counter_mode_2);
+
+    if (timer_counter_mode_0.fire_irq_repeatedly ||
+        timer_counter_mode_1.fire_irq_repeatedly ||
+        timer_counter_mode_2.fire_irq_repeatedly)
+        dbg("TODO: fire timer IRQs repeatedly");
+
+    if (timer_counter_mode_0.irq_toggle_mode ||
+        timer_counter_mode_1.irq_toggle_mode ||
+        timer_counter_mode_2.irq_toggle_mode)
+        dbg("TODO: timer IRQs toggle mode");
+
+    if (timer_counter_mode_0.interrupt_request_inverted) fire_interrupt(Interrupt::Timer0);
+    if (timer_counter_mode_1.interrupt_request_inverted) fire_interrupt(Interrupt::Timer1);
+    if (timer_counter_mode_2.interrupt_request_inverted) fire_interrupt(Interrupt::Timer2);
+#endif
 }
