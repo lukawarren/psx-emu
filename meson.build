@@ -29,8 +29,6 @@ else
     '-Wdouble-promotion',
     '-Wformat=2',
     '-Wno-implicit-int-conversion', # Clang is overzealous
-    '-march=native',
-    '-mtune=native',
     '-O3',
     '-ffast-math',
     '-funroll-loops',
