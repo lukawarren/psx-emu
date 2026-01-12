@@ -6,8 +6,8 @@ constexpr static u32 sector_size = 0x930;
 constexpr static u32 data_size = 0x800;
 
 Drive::Drive() : cue(
-    "/home/luka/src/luka/psx-emu/ROMs/Crash Bandicoot (USA).cue",
-    "/home/luka/src/luka/psx-emu/ROMs/Crash Bandicoot (USA).bin"
+    "/Users/luka/src/luka/psx-emu/ROMs/Crash Bandicoot (USA).cue",
+    "/Users/luka/src/luka/psx-emu/ROMs/Crash Bandicoot (USA).bin"
 )
 {
 }

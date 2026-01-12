@@ -5,7 +5,7 @@
 #define ENABLE_SERIAL 1
 #define SIDELOAD_EXE 0
 
-CPU::CPU() : bus(*this, "/home/luka/src/luka/psx-emu/SCPH1001.bin")
+CPU::CPU() : bus(*this, "/Users/luka/src/luka/psx-emu/SCPH1001.bin")
 // CPU::CPU() : bus(*this, "/home/luka/src/pcsx-redux/src/mips/openbios/openbios.bin")
 {
     pc = 0xBFC00000;
@@ -59,7 +59,7 @@ void CPU::clock()
         // bus.sideload_exe("../tests/gte/test-all/test-all.exe");
         // bus.sideload_exe("../tests/psxtest_cpu.exe");
         // bus.sideload_exe("../tests/cube.exe");
-        bus.sideload_exe("../tests/fonts.exe");
+        // bus.sideload_exe("../tests/fonts.exe");
     }
 #endif
 

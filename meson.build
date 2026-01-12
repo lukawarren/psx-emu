@@ -28,12 +28,13 @@ else
     '-Wundef',
     '-Wdouble-promotion',
     '-Wformat=2',
+    '-Wno-implicit-int-conversion', # Clang is overzealous
     '-march=native',
     '-mtune=native',
     '-O3',
     '-ffast-math',
     '-funroll-loops',
-    '-fomit-frame-pointer', # Free up a register
+    '-fomit-frame-pointer' # Free up a register
   ]
 
   # GCC-specific optimisations

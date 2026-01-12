@@ -132,7 +132,7 @@ u32 GTE::read_register(const u32 reg)
             };
 
             // Re-compute if an error did indeed occur
-            if (or_over(flag, 30, 23) | or_over(flag, 18, 13))
+            if (or_over(flag, 30, 23) || or_over(flag, 18, 13))
                 flag |= FLAG_ERROR;
             else
                 flag &= ~FLAG_ERROR;

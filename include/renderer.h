@@ -107,10 +107,10 @@ private:
     static inline u16 pack_colour(const u8 r, const u8 g, const u8 b, const bool mask_bit)
     {
         // Drop from 8-bit per channel (24-bit colour) to 5-bit (plus mask) for 16-bit
-        return (mask_bit ? (1 << 15) : 0) |
+        return (u16)(mask_bit ? (1 << 15) : 0) |
                ((u16)(b >> 3) << 10) |
                ((u16)(g >> 3) << 5)  |
-                (u16)(r >> 3);
+               ((u16)(r >> 3) << 0);
     }
 
     static inline void unpack_uv(const u32 uv, u8& u, u8& v)
